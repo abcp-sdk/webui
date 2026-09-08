@@ -20,6 +20,9 @@
     Languages,
   } from '@lucide/svelte'
 
+  const LANG_OPTIONS = ['zh', 'en'] as const satisfies Lang[]
+  const THEME_OPTIONS = ['system', 'light', 'dark'] as const satisfies ThemeType[]
+
   let promptText = $state('')
   let models: { id: string }[] = $state([])
   let presets: { id: string }[] = $state([])
@@ -35,7 +38,8 @@
   })
 
   function current_lang(): Lang {
-    return (localStorage.getItem('agent.lang') === 'en' ? 'en' : 'zh') as Lang
+    if (localStorage.getItem('agent.lang') === 'en') return 'en'
+    return 'zh'
   }
 
   function shift(v: string | null | undefined): string | null {
@@ -123,14 +127,14 @@
         </Button>
         {#if themeOpen}
           <div class="theme-menu">
-            {#each ['zh', 'en'] as l (l)}
-              <Button variant="ghost" onclick={() => onLangChange(l as Lang)}>
+            {#each LANG_OPTIONS as l (l)}
+              <Button variant="ghost" onclick={() => onLangChange(l)}>
                 {l}
               </Button>
             {/each}
             <Separator />
-            {#each ['system', 'light', 'dark'] as tt (tt)}
-              <Button variant="ghost" onclick={() => onThemeChange(tt as ThemeType)} class="inline-flex items-center gap-1">
+            {#each THEME_OPTIONS as tt (tt)}
+              <Button variant="ghost" onclick={() => onThemeChange(tt)} class="inline-flex items-center gap-1">
                 {#if tt === 'system'}<Monitor class="size-4" />{:else if tt === 'light'}<Sun class="size-4" />{:else}<Moon class="size-4" />{/if}
               </Button>
             {/each}
