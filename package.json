@@ -10,15 +10,25 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "svelte": "^5.56.10",
+    "@abcp/agent-sdk": "file:../agent-sdk-typescript",
     "@connectrpc/connect": "^2.2.0",
     "@connectrpc/connect-web": "^2.2.0",
-    "@abcp/agent-sdk": "file:../agent-sdk-typescript"
+    "@lucide/svelte": "^1.42.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "bits-ui": "^2.19.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "marked": "^18.0.12",
+    "svelte": "^5.56.10",
+    "tailwind-merge": "^3.6.0",
+    "tailwind-variants": "^3.3.1",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@tailwindcss/typography": "^0.5.20",
+    "svelte-check": "^4.3.0",
     "typescript": "^5.9.3",
-    "vite": "^8.2.2",
-    "svelte-check": "^4.3.0"
+    "vite": "^8.2.2"
   }
 }

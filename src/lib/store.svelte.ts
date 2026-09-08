@@ -1,4 +1,4 @@
-import { agent } from './agent'
+import { agent, toAgentEvent, type AgentEvent } from './agent'
 import {
   type Session,
   type Message,
@@ -8,11 +8,6 @@ import { create } from '@bufbuild/protobuf'
 import { PartSchema } from '@abcp/agent-sdk'
 import { breakpoint, type Breakpoint } from './responsive'
 import { loadTheme, applyTheme, saveTheme, type Theme } from './theme'
-
-export interface WatchEvent {
-  event: string
-  params: Record<string, unknown>
-}
 
 interface LocalMessage {
   id: string
@@ -106,7 +101,7 @@ class AgentStore {
       try {
         const stream = agent.watchSession({ id: name }, { signal: this.controller!.signal })
         for await (const ev of stream) {
-          this.handleEvent({ event: ev.event, params: (ev.params ?? {}) as Record<string, unknown> })
+          this.handleEvent(toAgentEvent(ev.event, (ev.params ?? {}) as Record<string, unknown>))
         }
       } catch {
         // aborted / switched
@@ -119,35 +114,32 @@ class AgentStore {
     this.controller = null
   }
 
-  private handleEvent(ev: WatchEvent) {
-    const p = ev.params
-    switch (ev.event) {
+  private handleEvent(ev: AgentEvent) {
+    switch (ev.kind) {
       case 'text-delta':
-        this.appendDelta(String(p['id'] ?? ''), String(p['text'] ?? ''), false)
+        this.appendDelta(ev.id, ev.text, false)
         break
       case 'reasoning-delta':
-        this.appendDelta(String(p['id'] ?? ''), String(p['text'] ?? ''), true)
+        this.appendDelta(ev.id, ev.text, true)
         break
       case 'tool-call': {
-        this.ensureTool(String(p['toolCallId'] ?? p['id'] ?? ''), String(p['toolName'] ?? p['name'] ?? 'tool'))
+        this.ensureTool(ev.id, ev.name)
         break
       }
       case 'tool-result':
       case 'tool-error': {
-        this.toolResult(String(p['toolCallId'] ?? p['id'] ?? ''), String(p['formatted'] ?? p['output'] ?? p['result'] ?? ''))
+        this.toolResult(ev.id, ev.output)
         break
       }
       case 'turn-complete':
         this.finish()
         break
       case 'status': {
-        const t = p['type']
-        if (t === 'busy' || t === 'running') this.sending = true
+        if (ev.type === 'busy' || ev.type === 'running') this.sending = true
         else this.finish()
         break
       }
       case 'error':
-      case 'provider-error':
         this.finish()
         break
       default:

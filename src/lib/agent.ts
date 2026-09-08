@@ -1,4 +1,6 @@
 import { createAgentWebClient, type AgentWebClient } from '@abcp/agent-sdk'
+import { toAgentEvent, type AgentEvent } from './events'
+import type { Session, Message } from '@abcp/agent-sdk'
 
 /**
  * Agent web client (fetch / connect-web). Talks directly to the abc agent
@@ -12,3 +14,6 @@ const origin =
 export const agent: AgentWebClient = createAgentWebClient({
   baseUrl: origin.replace(/\/+$/, ''),
 })
+
+export type { Session, Message }
+export { toAgentEvent, type AgentEvent }

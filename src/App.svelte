@@ -1,17 +1,42 @@
 <script lang="ts">
   import { store } from './lib/store.svelte'
   import { agent } from './lib/agent'
+  import { setLanguage, loadLanguage, t, type Lang } from './lib/i18n'
+  import type { Theme as ThemeType } from './lib/theme'
+  import { Button } from './lib/components/ui/button'
+  import { Input } from './lib/components/ui/input'
+  import { Label } from './lib/components/ui/label'
+  import { Separator } from './lib/components/ui/separator'
+  import {
+    Plus,
+    Pencil,
+    Trash2,
+    Sun,
+    Moon,
+    Monitor,
+    Send,
+    Square,
+    FileOutput,
+    Languages,
+  } from '@lucide/svelte'
 
   let promptText = $state('')
   let models: { id: string }[] = $state([])
   let presets: { id: string }[] = $state([])
   let themeOpen = $state(false)
+  let lang = $state<Lang>('zh')
 
   $effect(() => {
+    loadLanguage()
+    lang = current_lang()
     void store.refreshSessions()
     void agent.listModels({}).then(r => (models = r.models))
     void agent.listPresets({}).then(r => (presets = r.presets))
   })
+
+  function current_lang(): Lang {
+    return (localStorage.getItem('agent.lang') === 'en' ? 'en' : 'zh') as Lang
+  }
 
   function shift(v: string | null | undefined): string | null {
     return v && v !== '' ? v : null
@@ -22,21 +47,26 @@
   }
 
   async function renameSession(name: string) {
-    const next = prompt('New name for session', name)
+    const next = prompt(t('rename'), name)
     if (next && next.trim()) await store.renameSession(name, next.trim())
   }
 
   async function onSubmit(e: Event) {
     e.preventDefault()
-    const t = promptText.trim()
-    if (!t) return
+    const tx = promptText.trim()
+    if (!tx) return
     promptText = ''
-    await store.send(t)
+    await store.send(tx)
   }
 
-  function onThemeChange(t: string) {
-    store.setTheme(t as 'light' | 'dark' | 'system')
+  function onThemeChange(t: ThemeType) {
+    store.setTheme(t)
     themeOpen = false
+  }
+
+  function onLangChange(l: Lang) {
+    setLanguage(l)
+    lang = l
   }
 </script>
 
@@ -46,17 +76,16 @@
     html[data-theme='light'] { color-scheme: light; }
     html[data-theme='dark'] { color-scheme: dark; }
   </style>
-  <script>
-    // nothing
-  </script>
 </svelte:head>
 
 <main class:compact={store.isCompact} data-theme={store.theme === 'system' ? '' : store.theme}>
   <!-- Left: session list -->
   <aside class="sessions">
     <div class="sess-head">
-      <strong>Sessions</strong>
-      <button onclick={() => store.createSession()}>+</button>
+      <strong>{t('sessions')}</strong>
+      <Button variant="ghost" size="icon-sm" onclick={() => store.createSession()}>
+        <Plus class="size-4" />
+      </Button>
     </div>
     <ul>
       {#each store.sessions as s (s.name)}
@@ -70,10 +99,16 @@
             <span class="prev">{shift(s.lastMessagePreview) ?? ''}</span>
           </button>
           <div class="sess-menu">
-            <button onclick={() => renameSession(s.name)}>✎</button>
-            <button onclick={() => deleteSession(s.name)}>×</button>
+            <Button variant="ghost" size="icon-xs" onclick={() => renameSession(s.name)}>
+              <Pencil class="size-3" />
+            </Button>
+            <Button variant="ghost" size="icon-xs" onclick={() => deleteSession(s.name)}>
+              <Trash2 class="size-3" />
+            </Button>
           </div>
         </li>
+      {:else}
+        <li class="empty">{t('noSessions')}</li>
       {/each}
     </ul>
   </aside>
@@ -81,12 +116,30 @@
   <!-- Right: chat -->
   <section class="chat">
     <header class="chat-head">
-      <span class="title">{shift(store.activeName) ?? 'Agent'}</span>
+      <span class="title">{shift(store.activeName) ?? t('appName')}</span>
       <div class="controls">
+        <Button variant="ghost" size="icon-sm" onclick={() => (themeOpen = !themeOpen)}>
+          <Languages class="size-4" />
+        </Button>
+        {#if themeOpen}
+          <div class="theme-menu">
+            {#each ['zh', 'en'] as l (l)}
+              <Button variant="ghost" onclick={() => onLangChange(l as Lang)}>
+                {l}
+              </Button>
+            {/each}
+            <Separator />
+            {#each ['system', 'light', 'dark'] as tt (tt)}
+              <Button variant="ghost" onclick={() => onThemeChange(tt as ThemeType)} class="inline-flex items-center gap-1">
+                {#if tt === 'system'}<Monitor class="size-4" />{:else if tt === 'light'}<Sun class="size-4" />{:else}<Moon class="size-4" />{/if}
+              </Button>
+            {/each}
+          </div>
+        {/if}
         <select
           onchange={(e) => store.activeName && store.switchModel(store.activeName, e.currentTarget.value)}
         >
-          <option value="">model</option>
+          <option value="">{t('model')}</option>
           {#each models as m (m.id)}
             <option value={m.id}>{m.id}</option>
           {/each}
@@ -94,45 +147,51 @@
         <select
           onchange={(e) => store.activeName && store.setPreset(store.activeName, e.currentTarget.value)}
         >
-          <option value="">preset</option>
+          <option value="">{t('preset')}</option>
           {#each presets as p (p.id)}
             <option value={p.id}>{p.id}</option>
           {/each}
         </select>
-        <button onclick={() => store.activeName && store.interrupt(store.activeName)}>Stop</button>
-        <button onclick={() => store.activeName && store.compact(store.activeName)}>Compact</button>
-        <button onclick={() => (themeOpen = !themeOpen)}>◐</button>
-        {#if themeOpen}
-          <div class="theme-menu">
-            {#each ['light', 'dark', 'system'] as t (t)}
-              <button onclick={() => onThemeChange(t)} class:sel={store.theme === t}>{t}</button>
-            {/each}
-          </div>
-        {/if}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onclick={() => store.activeName && store.interrupt(store.activeName)}
+          title={t('stop')}
+        >
+          <Square class="size-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onclick={() => store.activeName && store.compact(store.activeName)}
+          title={t('compact')}
+        >
+          <FileOutput class="size-4" />
+        </Button>
       </div>
     </header>
 
     <div class="messages">
       {#if store.loading}
-        <div class="empty">Loading…</div>
+        <div class="empty">{t('loading')}</div>
       {:else if store.messages.length === 0}
-        <div class="empty">No messages. Send one below.</div>
+        <div class="empty">{t('noMessages')}</div>
       {:else}
         {#each store.messages as m (m.id)}
           <div class="msg {m.role}">
             {#if m.tools.length}
               <div class="tools">
-                {#each m.tools as t (t.id)}
+                {#each m.tools as tool (tool.id)}
                   <details>
-                    <summary>⚙ {t.name}</summary>
-                    <pre>{t.output}</pre>
+                    <summary>⚙ {tool.name}</summary>
+                    <pre>{tool.output}</pre>
                   </details>
                 {/each}
               </div>
             {/if}
             {#if m.reasoning}
               <details class="reasoning">
-                <summary>Thinking…</summary>
+                <summary>{t('thinking')}</summary>
                 <div class="text">{m.reasoning}</div>
               </details>
             {/if}
@@ -148,11 +207,15 @@
     </div>
 
     <form class="composer" onsubmit={onSubmit}>
-      <input bind:value={promptText} placeholder="Message" autocomplete="off" />
-      <button type="submit" disabled={store.sending}>Send</button>
+      <Input bind:value={promptText} placeholder={t('messagePlaceholder')} autocomplete="off" />
+      <Button type="submit" disabled={store.sending}>
+        <Send class="size-4" />
+        {t('send')}
+      </Button>
     </form>
   </section>
 </main>
+
 
 <style>
   main { display: flex; height: 100vh; font-family: system-ui, sans-serif; transition: background-color .25s, color .25s; }
@@ -161,7 +224,6 @@
 
   aside { width: 300px; min-width: 300px; border-right: 1px solid var(--border); height: 100%; overflow: auto; }
   .sess-head { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--border); }
-  .sess-head button { font-size: 18px; }
   ul { list-style: none; margin: 0; padding: 0; }
   li { display: flex; align-items: center; }
   li .sess { flex: 1; text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
@@ -176,8 +238,6 @@
   .chat-head .title { font-weight: 700; }
   .controls { display: flex; gap: 8px; align-items: center; position: relative; }
   .theme-menu { position: absolute; top: 44px; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 4px; display: flex; flex-direction: column; z-index: 5; }
-  .theme-menu button { text-align: left; padding: 6px 10px; }
-  .theme-menu button.sel { background: var(--accent-soft); }
 
   .messages { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
   .msg { max-width: 640px; white-space: pre-wrap; padding: 10px 14px; border-radius: 12px; }
@@ -192,8 +252,6 @@
   @keyframes blink { 50% { opacity: 0; } }
 
   .composer { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
-  .composer input { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
-  .composer button { padding: 10px 16px; border-radius: 8px; }
 
   :global(:root) {
     --border: hsl(0 0% 32%); --surface: hsl(0 0% 14%); --text: hsl(0 0% 94%);
