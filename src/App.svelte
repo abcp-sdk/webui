@@ -8,6 +8,7 @@
   import { Label } from './lib/components/ui/label'
   import { Separator } from './lib/components/ui/separator'
   import {
+    Menu,
     Plus,
     Pencil,
     Trash2,
@@ -27,6 +28,7 @@
   let models: { id: string }[] = $state([])
   let presets: { id: string }[] = $state([])
   let themeOpen = $state(false)
+  let drawerOpen = $state(false)
   let lang = $state<Lang>('zh')
 
   $effect(() => {
@@ -120,6 +122,7 @@
   <!-- Right: chat -->
   <section class="chat">
     <header class="chat-head">
+      {#if store.isCompact}<Button variant="ghost" size="icon-sm" onclick={() => (drawerOpen = !drawerOpen)}><Menu class="size-4" /></Button>{/if}
       <span class="title">{shift(store.activeName) ?? t('appName')}</span>
       <div class="controls">
         <Button variant="ghost" size="icon-sm" onclick={() => (themeOpen = !themeOpen)}>
@@ -220,6 +223,20 @@
   </section>
 </main>
 
+{#if store.isCompact && drawerOpen}
+  <div role="button" tabindex="0" class="drawer-backdrop" onclick={() => (drawerOpen = false)} onkeydown={(e) => { if (e.key === "Escape") drawerOpen = false; }}>
+    <div role="dialog" tabindex="0" class="drawer" onclick={(e) => e.stopPropagation()} onkeydown={(e) => { if (e.key === "Escape") drawerOpen = false; }}>
+      {#each store.sessions as s (s.name)}
+        <button class="drawer-item" class:active={s.name === store.activeName}
+          onclick={() => { store.selectSession(s.name); drawerOpen = false; }}>
+          <span class="title">{shift(s.name) ?? s.name}</span>
+          <span class="prev">{shift(s.lastMessagePreview) ?? ''}</span>
+        </button>
+      {/each}
+    </div>
+  </div>
+{/if}
+
 
 <style>
   main { display: flex; height: 100vh; font-family: system-ui, sans-serif; transition: background-color .25s, color .25s; }
@@ -255,6 +272,10 @@
   .caret { animation: blink 1s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
 
+  .drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 20; }
+  .drawer { position: absolute; left: 0; top: 0; bottom: 0; width: 280px; background: var(--surface); border-right: 1px solid var(--border); padding: 8px; overflow: auto; }
+  .drawer-item { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px; }
+  .drawer-item.active { background: var(--accent-soft); }
   .composer { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
 
   :global(:root) {
