@@ -25,17 +25,36 @@
   const THEME_OPTIONS = ['system', 'light', 'dark'] as const satisfies ThemeType[]
 
   let promptText = $state('')
+  let providerIds: string[] = $state([])
+  let provider = $state('')
   let models: { id: string }[] = $state([])
   let presets: { id: string }[] = $state([])
   let themeOpen = $state(false)
   let drawerOpen = $state(false)
   let lang = $state<Lang>('zh')
 
+  // provider_id is REQUIRED by ListModels (the agent rejects a global list), so
+  // the provider is picked first and its models are fetched on change.
+  const loadModels = async (pid: string) => {
+    if (!pid) {
+      models = []
+      return
+    }
+    const r = await agent.listModels({ providerId: pid })
+    models = r.models
+  }
+
   $effect(() => {
     loadLanguage()
     lang = current_lang()
     void store.refreshSessions()
-    void agent.listModels({}).then(r => (models = r.models))
+    void agent.listProviders({}).then(async r => {
+      providerIds = r.providers.map(p => p.providerId)
+      if (providerIds.length > 0 && !provider) {
+        provider = providerIds[0]
+        await loadModels(provider)
+      }
+    })
     void agent.listPresets({}).then(r => (presets = r.presets))
   })
 
@@ -143,6 +162,17 @@
             {/each}
           </div>
         {/if}
+        <select
+          value={provider}
+          onchange={(e) => {
+            provider = e.currentTarget.value
+            void loadModels(provider)
+          }}
+        >
+          {#each providerIds as pid (pid)}
+            <option value={pid}>{pid}</option>
+          {/each}
+        </select>
         <select
           onchange={(e) => store.activeName && store.switchModel(store.activeName, e.currentTarget.value)}
         >

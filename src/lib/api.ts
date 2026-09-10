@@ -59,8 +59,8 @@ export function compact(id: string) {
   return agent.compact({ id })
 }
 
-export function listModels() {
-  return agent.listModels({})
+export function listModels(providerId: string) {
+  return agent.listModels({ providerId })
 }
 
 export function listPresets() {
