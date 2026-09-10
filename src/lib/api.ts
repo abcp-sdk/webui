@@ -40,8 +40,8 @@ export function watchSession(id: string, signal?: AbortSignal) {
   return agent.watchSession({ id }, { signal })
 }
 
-export function switchModel(id: string, model: string) {
-  return agent.setModel({ id, model })
+export function switchModel(id: string, model: string, variant?: string) {
+  return agent.setModel({ id, model, variant: variant ?? '' })
 }
 
 export function updateSettings(

@@ -250,8 +250,8 @@ class AgentStore {
     return agent.compact({ id: name })
   }
 
-  switchModel(name: string, model: string) {
-    return agent.setModel({ id: name, model })
+  switchModel(name: string, model: string, variant?: string) {
+    return agent.setModel({ id: name, model, variant: variant ?? '' })
   }
 
   setPreset(name: string, preset: string) {

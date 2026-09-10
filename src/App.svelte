@@ -27,14 +27,22 @@
   let promptText = $state('')
   let providerIds: string[] = $state([])
   let provider = $state('')
-  let models: { id: string }[] = $state([])
+  let models: { id: string; name: string; variants: { id: string; name: string }[] }[] = $state([])
+  let modelId = $state('')
+  let variant = $state('')
   let presets: { id: string }[] = $state([])
   let themeOpen = $state(false)
   let drawerOpen = $state(false)
   let lang = $state<Lang>('zh')
 
-  // provider_id is REQUIRED by ListModels (the agent rejects a global list), so
-  // the provider is picked first and its models are fetched on change.
+  // The session model is a canonical "provider_id/model_id" reference (a bare
+  // model id is never resolved by flat lookup). provider_id is REQUIRED by
+  // ListModels, so the provider is picked first, its models are fetched, and
+  // the selected variant is read off the chosen model.
+  const variants = $derived(
+    models.find(m => m.id === modelId)?.variants ?? [],
+  )
+
   const loadModels = async (pid: string) => {
     if (!pid) {
       models = []
@@ -42,6 +50,11 @@
     }
     const r = await agent.listModels({ providerId: pid })
     models = r.models
+  }
+
+  const applyModel = (name: string) => {
+    const ref = modelId ? `${provider}/${modelId}` : ''
+    void store.switchModel(name, ref, variant)
   }
 
   $effect(() => {
@@ -166,6 +179,8 @@
           value={provider}
           onchange={(e) => {
             provider = e.currentTarget.value
+            modelId = ''
+            variant = ''
             void loadModels(provider)
           }}
         >
@@ -174,13 +189,34 @@
           {/each}
         </select>
         <select
-          onchange={(e) => store.activeName && store.switchModel(store.activeName, e.currentTarget.value)}
+          value={modelId}
+          onchange={(e) => {
+            modelId = e.currentTarget.value
+            variant = ''
+            if (store.activeName && modelId) {
+              store.switchModel(store.activeName, `${provider}/${modelId}`)
+            }
+          }}
         >
           <option value="">{t('model')}</option>
           {#each models as m (m.id)}
-            <option value={m.id}>{m.id}</option>
+            <option value={m.id}>{m.name || m.id}</option>
           {/each}
         </select>
+        {#if variants.length}
+          <select
+            value={variant}
+            onchange={(e) => {
+              variant = e.currentTarget.value
+              if (store.activeName) applyModel(store.activeName)
+            }}
+          >
+            <option value="">{t('variantNone')}</option>
+            {#each variants as v (v.id)}
+              <option value={v.id}>{v.name || v.id}</option>
+            {/each}
+          </select>
+        {/if}
         <select
           onchange={(e) => store.activeName && store.setPreset(store.activeName, e.currentTarget.value)}
         >
