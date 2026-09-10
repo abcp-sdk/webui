@@ -80,6 +80,36 @@ class AgentStore {
     this.sessions = r.sessions
   }
 
+  /** Subscribe to the real-time session list (snapshot + upserts/removals). */
+  startSessionWatch() {
+    void (async () => {
+      for (;;) {
+        try {
+          const stream = agent.watchSessions({})
+          for await (const ev of stream) {
+            if (ev.snapshot) {
+              this.sessions = [...ev.upserts]
+            } else {
+              let next = [...this.sessions]
+              for (const s of ev.upserts) {
+                const i = next.findIndex(x => x.name === s.name)
+                if (i === -1) next.push(s)
+                else next[i] = s
+              }
+              if (ev.removed.length > 0) {
+                next = next.filter(s => !ev.removed.includes(s.name))
+              }
+              this.sessions = next
+            }
+          }
+        } catch {
+          // fall through to reconnect
+        }
+        await new Promise(r => setTimeout(r, 2000))
+      }
+    })()
+  }
+
   async selectSession(name: string) {
     this.activeName = name
     this.loading = true

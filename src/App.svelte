@@ -61,6 +61,7 @@
     loadLanguage()
     lang = current_lang()
     void store.refreshSessions()
+    store.startSessionWatch()
     void agent.listProviders({}).then(async r => {
       providerIds = r.providers.map(p => p.providerId)
       if (providerIds.length > 0 && !provider) {
