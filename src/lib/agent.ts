@@ -1,10 +1,12 @@
-import { createClient, type Interceptor } from '@connectrpc/connect'
+// Transport + typed client factory over the latest @abcp/agent-sdk
+// (agent.v1.AgentService, Connect protocol). The caller owns baseUrl + token;
+// the client is rebuilt on backend switch.
+import { createClient, type Client, type Interceptor } from '@connectrpc/connect'
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { AgentService } from '@abcp/agent-sdk'
-import { toAgentEvent, type AgentEvent } from './events'
-import type { Session, Message } from '@abcp/agent-sdk'
 
-/** Attach `Authorization: Bearer <token>` to every request. */
+export type AgentClient = Client<typeof AgentService>
+
 function bearerInterceptor(token: string): Interceptor {
   return next => async req => {
     if (token) req.header.set('Authorization', `Bearer ${token}`)
@@ -12,22 +14,15 @@ function bearerInterceptor(token: string): Interceptor {
   }
 }
 
-/**
- * Agent client over the connect-web transport. Talks directly to the abc agent
- * backend over agent.v1.AgentService. Same-origin by default; override the
- * origin with VITE_AGENT_URL. The transport (and auth) is built here — the SDK
- * only ships the generated client.
- */
-const origin =
-  (import.meta.env.VITE_AGENT_URL as string | undefined) ??
-  (typeof window !== 'undefined' ? window.location.origin : 'http://localhost')
+export function trimBase(baseUrl: string): string {
+  return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl
+}
 
-const transport = createConnectTransport({
-  baseUrl: origin.replace(/\/+$/, ''),
-  interceptors: [bearerInterceptor('')],
-})
-
-export const agent = createClient(AgentService, transport)
-
-export type { Session, Message }
-export { toAgentEvent, type AgentEvent }
+/** A fresh Connect-web client bound to one backend (baseUrl + bearer). */
+export function createAgentClient(baseUrl: string, token: string): AgentClient {
+  const transport = createConnectTransport({
+    baseUrl: trimBase(baseUrl),
+    interceptors: [bearerInterceptor(token)],
+  })
+  return createClient(AgentService, transport)
+}

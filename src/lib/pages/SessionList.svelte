@@ -1,0 +1,171 @@
+<script lang="ts">
+  // SessionList — web port of flutter screens/session_list_page.dart: search,
+  // multi-select batch delete, long-press actions (delete / mark read), new
+  // session (prompt), unread badges, pull-refresh, empty + error states.
+  import type { PageProps } from '$lib/page-props'
+  import { t } from '$lib/i18n.svelte'
+  import { showErrorToast, showToast } from '$lib/toast.svelte'
+  import { promptDialog, confirmDialog, actionSheet } from '$lib/dialogs'
+  import { sessionName } from '$lib/models'
+  import SessionRow from '$lib/components/SessionRow.svelte'
+  import { cn } from '$lib/utils'
+
+  let { store }: PageProps = $props()
+
+  let searching = $state(false)
+  let q = $state('')
+  let selectMode = $state(false)
+  let selected = $state<Set<string>>(new Set())
+
+  const filtered = $derived.by(() => {
+    if (!q.trim()) return store.sessions
+    const needle = q.trim().toLowerCase()
+    return store.sessions.filter(
+      s =>
+        s.id.toLowerCase().includes(needle) ||
+        s.lastMessagePreview.toLowerCase().includes(needle) ||
+        `${s.org}:${s.repo}:${s.branch}`.toLowerCase().includes(needle),
+    )
+  })
+
+  function exitSelect() {
+    selectMode = false
+    selected = new Set()
+  }
+
+  function toggle(id: string) {
+    const next = new Set(selected)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    selected = next
+  }
+
+  function toggleAll() {
+    if (selected.size === filtered.length) selected = new Set()
+    else selected = new Set(filtered.map(s => s.id))
+  }
+
+  async function deleteSelected() {
+    if (!selected.size) return
+    const ok = await confirmDialog({
+      title: t('deleteSessionsTitle', { n: selected.size }),
+      body: t('deleteSessionsBody'),
+      confirmLabel: t('delete'),
+      destructive: true,
+    })
+    if (!ok) return
+    const failed = await store.deleteSessions([...selected])
+    if (failed.length) showErrorToast(t('deleteFailed', { n: failed.length }))
+    else showToast(t('deleted'))
+    exitSelect()
+  }
+
+  async function create() {
+    const name = await promptDialog({ title: t('newSession'), confirmLabel: t('create') })
+    if (!name) return
+    try {
+      await store.api.createSession({ name })
+      await store.refreshSessions()
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+
+  async function sessionActions(sid: string) {
+    const s = store.sessionById(sid)
+    if (!s) return
+    // Long-press bottom sheet equivalent: delete (+ mark-read when unread).
+    const actions: string[] = []
+    if (store.isUnread(s)) actions.push('read')
+    actions.push('delete')
+    const pick = await actionSheet({
+      title: t('sessionActions'),
+      actions: actions.map(a => ({ value: a, label: a === 'read' ? t('markRead') : t('deleteSession'), destructive: a === 'delete' })),
+    })
+    if (pick === 'read') store.markSessionRead(sid)
+    else if (pick === 'delete') await deleteFlow(s.id)
+  }
+
+  async function deleteFlow(sid: string | null) {
+    const ok = await confirmDialog({
+      title: t('deleteSession'),
+      body: sid ? t('deleteSessionBody', { arg1: sessionName(store.sessionById(sid)!) }) : '',
+      confirmLabel: t('delete'),
+      destructive: true,
+    })
+    if (!ok || !sid) return
+    try {
+      await store.deleteSession(sid)
+      showToast(t('deleted'))
+    } catch (e) {
+      showErrorToast(String(e))
+    }
+  }
+
+</script>
+
+<div class="flex h-full w-full flex-col">
+  <header class="flex h-12 shrink-0 items-center gap-1 border-b border-border px-2">
+    {#if selectMode}
+      <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('cancel')} onclick={exitSelect}><X class="size-4" /></button>
+      <span class="flex-1 truncate px-1 text-sm font-semibold">{t('selectedCount', { n: selected.size })}</span>
+      <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('selectAll')} onclick={toggleAll}><ListChecks class="size-4" /></button>
+      <button
+        type="button"
+        class={cn('rounded p-1.5 hover:bg-muted', selected.size ? 'text-destructive' : 'text-muted-foreground')}
+        title={t('delete')}
+        onclick={() => void deleteSelected()}
+        disabled={!selected.size}
+      ><Trash2 class="size-4" /></button>
+    {:else if searching}
+      <button
+        type="button"
+        class="rounded p-1.5 hover:bg-muted"
+        onclick={() => {
+          q = ''
+          searching = false
+        }}
+      >←</button>
+      <input
+        bind:value={q}
+        class="h-9 min-w-0 flex-1 bg-transparent px-2 text-sm outline-none"
+        placeholder={t('searchHint')}
+      />
+    {:else}
+      <span class="flex-1 truncate px-2 text-base font-semibold">{t('tabChat')}</span>
+      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('search')} onclick={() => (searching = true)}><Search class="size-4" /></button>
+      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('selectSessions')} onclick={() => (selectMode = true)}><ListChecks class="size-4" /></button>
+      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('newSession')} onclick={() => void create()}><Plus class="size-4" /></button>
+    {/if}
+  </header>
+
+  {#if store.sessionError}
+    <div class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-meta text-destructive">
+      {t('connectionError')} · {store.sessionError}
+    </div>
+  {/if}
+
+  <div class="px-4 pt-2 pb-1 text-micro font-semibold tracking-wider text-muted-foreground uppercase">
+    {t('recent')}
+  </div>
+
+  <div class="min-h-0 flex-1 overflow-y-auto">
+    {#if filtered.length === 0}
+      <div class="p-4 text-center text-meta text-muted-foreground">{t('noSessions')}</div>
+    {:else}
+      {#each filtered as s (s.id)}
+        <SessionRow
+          session={s}
+          isActive={s.id === store.activeSessionId}
+          subtitle={s.lastMessagePreview || s.id}
+          unread={store.isUnread(s)}
+          unreadCount={store.unreadCountFor(s)}
+          selectable={selectMode}
+          selected={selected.has(s.id)}
+          onTap={() => (selectMode ? toggle(s.id) : store.pickSession(s.id))}
+          onLongPress={selectMode ? null : () => void sessionActions(s.id)}
+        />
+      {/each}
+    {/if}
+  </div>
+</div>

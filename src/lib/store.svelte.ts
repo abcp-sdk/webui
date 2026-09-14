@@ -1,296 +1,368 @@
-import { agent, toAgentEvent, type AgentEvent } from './agent'
-import {
-  type Session,
-  type Message,
-  type Part,
-} from '@abcp/agent-sdk'
-import { create } from '@bufbuild/protobuf'
-import { PartSchema } from '@abcp/agent-sdk'
-import { breakpoint, type Breakpoint } from './responsive'
-import { loadTheme, applyTheme, saveTheme, type Theme } from './theme'
+// AppStore — the web port of flutter/lib/store.dart (Svelte 5 runes edition).
+// Owns: the session list (watchSessions live stream + reconnect backoff),
+// unread read-watermarks, per-session chat drafts, provider draft, and the
+// per-tab navigation stacks.
+import type { AgentApi } from './api'
+import type { LocalStore } from './db'
+import type { ChatDraft, ProviderDraft, Session } from './models'
+import { draftFromProvider, type ProviderInfo } from './models'
+import { Prefs } from './prefs'
 
-interface LocalMessage {
-  id: string
-  role: string
-  prevId: string
-  createdAt: string
-  parts: Part[]
-  __local?: boolean
+export type SiderTab = 'chat' | 'config'
+export type SessionOverlay = 'mailbox'
+
+// ---- navigation model (navigation.dart) ----
+
+export type AppPage =
+  | { kind: 'chat_list'; key: 'chat_list' }
+  | { kind: 'chat_session'; key: 'chat_session' }
+  | { kind: 'chat_overlay'; key: 'chat_overlay'; overlay: SessionOverlay }
+  | { kind: 'config_root'; key: 'config_root' }
+  | { kind: 'config_sub'; key: string; id: string }
+  | { kind: 'providers_list'; key: 'providers_list' }
+  | { kind: 'preset_form'; key: 'preset_form_new' }
+  | { kind: 'provider_form'; key: 'provider_form' }
+  | { kind: 'gateway_form'; key: 'gateway_form' }
+  | { kind: 'provider_models'; key: string; modelId: string | null }
+  | { kind: 'gateway_model'; key: string; modelId: string | null }
+
+export function rootPageFor(tab: SiderTab): AppPage {
+  return tab === 'chat' ? { kind: 'chat_list', key: 'chat_list' } : { kind: 'config_root', key: 'config_root' }
 }
 
-export interface DisplayMessage {
-  id: string
-  role: string
-  text: string
-  reasoning: string
-  tools: { id: string; name: string; output: string }[]
-  streaming: boolean
-}
+export class AppStore {
+  api: AgentApi
+  local: LocalStore | null
 
-function toDisplay(m: { id: string; role: string; parts?: Part[]; __local?: boolean }): DisplayMessage {
-  let text = ''
-  let reasoning = ''
-  const tools: { id: string; name: string; output: string }[] = []
-  for (const p of m.parts ?? []) {
-    if (p.type === 'text') text += p.data
-    else if (p.type === 'reasoning') reasoning += p.data
-    else if (p.type === 'tool') {
-      let name = p.data
-      let output = ''
-      try {
-        const j = JSON.parse(p.data)
-        name = String(j['toolName'] ?? j['name'] ?? name)
-        output = String(j['formatted'] ?? j['output'] ?? j['result'] ?? '')
-      } catch {
-        // already plain
-      }
-      tools.push({ id: p.id, name, output })
-    }
-  }
-  return { id: m.id, role: m.role, text, reasoning, tools, streaming: !!m.__local }
-}
-
-class AgentStore {
+  siderTab = $state<SiderTab>('chat')
   sessions = $state<Session[]>([])
-  activeName = $state<string>('')
-  messages = $state<DisplayMessage[]>([])
-  sending = $state(false)
-  loading = $state(false)
-  theme = $state<Theme>(loadTheme())
-  bp = $state<Breakpoint>(breakpoint())
-  private controller: AbortController | null = null
-  private raw: LocalMessage[] = []
+  activeSessionId = $state<string | null>(null)
+  sessionOverlay = $state<SessionOverlay | null>(null)
 
-  constructor() {
-    applyTheme(this.theme)
-    window.addEventListener('resize', () => (this.bp = breakpoint()))
+  sessionRevision = $state(0)
+  /** Last sessions-list load error ('' when healthy) — surfaced as a banner. */
+  sessionError = $state('')
+
+  /** session → last read message_seq (client-local). */
+  readSeqs: Record<string, number> = $state({})
+
+  /** Per-session composer drafts, surviving navigation. */
+  chatDrafts = $state<Record<string, ChatDraft>>({})
+
+  /** Provider draft shared by the provider/model form pages. */
+  providerDraft: ProviderDraft | null = $state(null)
+  providersRevision = $state(0)
+
+  // $state: push/pop must be reactive (the Shell derives its panes from it).
+  // Both tabs are pre-seeded so no lazy mutation happens during render
+  // (Svelte 5 forbids state_unsafe_mutation inside deriveds).
+  private stacks = $state<Record<SiderTab, AppPage[]>>({
+    chat: [rootPageFor('chat')],
+    config: [rootPageFor('config')],
+  })
+
+  // ---- watchSessions live list ----
+  private sessionAbort: AbortController | null = null
+  private sessionTimer: ReturnType<typeof setTimeout> | null = null
+  private sessionAttempt = 0
+  private firstSnapshot = true
+  private static MAX_SESSION_ATTEMPTS = 20
+
+  constructor(api: AgentApi, local: LocalStore | null) {
+    this.api = api
+    this.local = local
+    this.hydrateLocal()
+    this.startSessionWatch()
   }
 
-  get isCompact() {
-    return this.bp === 'compact'
-  }
-
-  setTheme(t: Theme) {
-    this.theme = t
-    saveTheme(t)
-  }
-
-  async refreshSessions() {
-    const r = await agent.listSessions({})
-    this.sessions = r.sessions
-  }
-
-  /** Subscribe to the real-time session list (snapshot + upserts/removals). */
-  startSessionWatch() {
-    void (async () => {
-      for (;;) {
-        try {
-          const stream = agent.watchSessions({})
-          for await (const ev of stream) {
-            if (ev.snapshot) {
-              this.sessions = [...ev.upserts]
-            } else {
-              let next = [...this.sessions]
-              for (const s of ev.upserts) {
-                const i = next.findIndex(x => x.name === s.name)
-                if (i === -1) next.push(s)
-                else next[i] = s
-              }
-              if (ev.removed.length > 0) {
-                next = next.filter(s => !ev.removed.includes(s.name))
-              }
-              this.sessions = next
-            }
-          }
-        } catch {
-          // fall through to reconnect
-        }
-        await new Promise(r => setTimeout(r, 2000))
-      }
-    })()
-  }
-
-  async selectSession(name: string) {
-    this.activeName = name
-    this.loading = true
-    this.stopStream()
+  private async hydrateLocal() {
+    const l = this.local
+    if (!l) return
     try {
-      const r = await agent.listMessages({ id: name, limit: 50 })
-      this.raw = [...(r.messages as LocalMessage[])]
-      this.messages = this.raw.map(toDisplay)
-    } finally {
-      this.loading = false
+      this.readSeqs = await l.loadReadSeqs()
+      this.chatDrafts = await l.loadDrafts()
+    } catch {
+      /* network-only fallback */
     }
-    this.startStream(name)
   }
 
-  private startStream(name: string) {
-    this.stopStream()
-    this.controller = new AbortController()
+  startSessionWatch() {
+    this.sessionTimer && clearTimeout(this.sessionTimer)
+    this.sessionTimer = null
+    this.sessionAbort?.abort()
+    const ac = new AbortController()
+    this.sessionAbort = ac
     void (async () => {
       try {
-        const stream = agent.watchSession({ id: name }, { signal: this.controller!.signal })
-        for await (const ev of stream) {
-          this.handleEvent(toAgentEvent(ev.event, (ev.params ?? {}) as Record<string, unknown>))
+        for await (const ev of this.api.watchSessions()) {
+          if (ac.signal.aborted) return
+          this.applySessionEvent(ev.snapshot, ev.upserts, ev.removed)
         }
+        this.onSessionStreamClosed()
       } catch {
-        // aborted / switched
+        if (!ac.signal.aborted) this.onSessionStreamClosed()
       }
     })()
   }
 
-  private stopStream() {
-    this.controller?.abort()
-    this.controller = null
+  private onSessionStreamClosed() {
+    if (this.sessionAttempt >= AppStore.MAX_SESSION_ATTEMPTS) return
+    const delay = Math.min(30, 1 << Math.min(this.sessionAttempt, 5))
+    this.sessionAttempt++
+    this.sessionTimer = setTimeout(() => this.startSessionWatch(), delay * 1000)
   }
 
-  private handleEvent(ev: AgentEvent) {
-    switch (ev.kind) {
-      case 'text-delta':
-        this.appendDelta(ev.id, ev.text, false)
-        break
-      case 'reasoning-delta':
-        this.appendDelta(ev.id, ev.text, true)
-        break
-      case 'tool-call': {
-        this.ensureTool(ev.id, ev.name)
-        break
+  private applySessionEvent(snapshot: boolean, upserts: Session[], removed: string[]) {
+    this.sessionAttempt = 0
+    if (snapshot) {
+      this.sessions = [...upserts]
+      // First ever snapshot on this device: seed read watermarks so historical
+      // sessions don't pop as unread; new ones start unread at 0.
+      if (this.firstSnapshot) {
+        this.firstSnapshot = false
+        for (const s of this.sessions) {
+          if (!(s.id in this.readSeqs)) this.readSeqs[s.id] = s.messageSeq
+        }
+        Prefs.saveReadSeqs(this.readSeqs)
       }
-      case 'tool-result':
-      case 'tool-error': {
-        this.toolResult(ev.id, ev.output)
-        break
+    } else {
+      const next = [...this.sessions]
+      for (const s of upserts) {
+        const i = next.findIndex(x => x.id === s.id)
+        if (i === -1) next.push(s)
+        else next[i] = s
       }
-      case 'turn-complete':
-        this.finish()
-        break
-      case 'status': {
-        if (ev.type === 'busy' || ev.type === 'running') this.sending = true
-        else this.finish()
-        break
-      }
-      case 'error':
-        this.finish()
-        break
-      default:
-        break
+      this.sessions = removed.length ? next.filter(s => !removed.includes(s.id)) : next
     }
-  }
-
-  private ensureStreaming(): LocalMessage {
-    const last = this.raw[this.raw.length - 1]
-    if (last && last.__local) return last
-    const m: LocalMessage = { id: `__stream-${Date.now()}`, role: 'assistant', prevId: '', createdAt: '', parts: [], __local: true }
-    this.raw = [...this.raw, m]
-    this.sending = true
-    this.messages = this.raw.map(toDisplay)
-    return m
-  }
-
-  private appendDelta(pid: string, text: string, reasoning: boolean) {
-    const msg = this.ensureStreaming()
-    const parts = [...msg.parts]
-    const key = reasoning ? `r${pid}` : pid
-    const idx = parts.findIndex(p => p.id === key)
-    if (idx >= 0) parts[idx] = { ...parts[idx], data: (parts[idx].data ?? '') + text }
-    else parts.push(makePart({ id: key, type: reasoning ? 'reasoning' : 'text', data: text }))
-    msg.parts = parts
-    this.messages = this.raw.map(toDisplay)
-  }
-
-  private ensureTool(id: string, name: string) {
-    const msg = this.ensureStreaming()
-    const parts = [...msg.parts]
-    if (!parts.some(p => p.id === id && p.type === 'tool')) {
-      parts.push(makePart({ id, type: 'tool', data: name }))
-      msg.parts = parts
-      this.messages = this.raw.map(toDisplay)
+    // The open session is being read live: advance its watermark so returning
+    // to the list shows no stale badge.
+    const active = this.activeSession
+    if (active && (this.readSeqs[active.id] ?? -1) < active.messageSeq) {
+      this.readSeqs[active.id] = active.messageSeq
+      Prefs.saveReadSeqs(this.readSeqs)
     }
+    this.sessionError = ''
   }
 
-  private toolResult(id: string, output: string) {
-    for (let i = this.raw.length - 1; i >= 0; i--) {
-      const msg = this.raw[i]
-      const parts = [...msg.parts]
-      const idx = parts.findIndex(p => p.id === id && p.type === 'tool')
-      if (idx >= 0) {
-        parts[idx] = { ...parts[idx], data: output }
-        msg.parts = parts
-        this.messages = this.raw.map(toDisplay)
-        return
-      }
-    }
+  get activeSession(): Session | null {
+    return this.sessions.find(s => s.id === this.activeSessionId) ?? null
   }
 
-  private finish() {
-    this.sending = false
-    this.raw = this.raw.filter(m => !m.__local)
-    this.messages = this.raw.map(toDisplay)
+  sessionById(id: string): Session | null {
+    return this.sessions.find(s => s.id === id) ?? null
   }
 
-  async send(text: string) {
-    if (!this.activeName) return
-    const t = text.trim()
-    if (!t) return
-    this.sending = true
-    const m: LocalMessage = {
-      id: `__user-${Date.now()}`,
-      role: 'user',
-      prevId: '',
-      createdAt: '',
-      parts: [makePart({ id: 't0', type: 'text', data: t })],
-      __local: true,
-    }
-    this.raw = [...this.raw, m]
-    this.messages = this.raw.map(toDisplay)
+  /** Manual refresh (pull-to-refresh / fallback reconciliation). */
+  async refreshSessions() {
     try {
-      await agent.prompt({ id: this.activeName, prompt: t })
+      this.sessions = await this.api.listSessions()
+      this.sessionError = ''
+    } catch (e) {
+      this.sessionError = String(e)
+    }
+  }
+
+  async deleteSession(id: string) {
+    await this.api.deleteSession(id)
+    if (this.activeSessionId === id) this.closeSession()
+    await this.refreshSessions()
+    void this.local?.removeSession(id)
+  }
+
+  /** Delete several sessions sequentially; returns the ids that failed. */
+  async deleteSessions(ids: string[]): Promise<string[]> {
+    const failed: string[] = []
+    let closedActive = false
+    for (const id of ids) {
+      try {
+        await this.api.deleteSession(id)
+        void this.local?.removeSession(id)
+        if (this.activeSessionId === id) {
+          this.activeSessionId = null
+          closedActive = true
+        }
+      } catch {
+        failed.push(id)
+      }
+    }
+    if (closedActive) this.closeSession()
+    await this.refreshSessions()
+    return failed
+  }
+
+  async forkSession(branch: string): Promise<boolean> {
+    const id = this.sessionById(this.activeSessionId ?? '')?.id
+    if (!id) return false
+    try {
+      const s = await this.api.fork(id, branch)
+      this.activeSessionId = s.id
+      await this.refreshSessions()
+      return true
     } catch {
-      // stream surfaces errors
+      return false
     }
   }
 
-  async createSession() {
-    await agent.createSession({})
-    await this.refreshSessions()
+  pickSession(id: string) {
+    this.activeSessionId = id
+    this.sessionOverlay = null
+    this.markSessionRead(id)
+    this.pushPage({ kind: 'chat_session', key: 'chat_session' })
   }
 
-  async deleteSession(name: string) {
-    await agent.deleteSession({ id: name })
-    if (this.activeName === name) {
-      this.stopStream()
-      this.activeName = ''
-      this.messages = []
-      this.raw = []
+  /** Read state is CLIENT-LOCAL: record a per-session read watermark. */
+  markSessionRead(id: string) {
+    const seq = this.sessionById(id)?.messageSeq ?? this.readSeqs[id] ?? 0
+    this.readSeqs[id] = seq
+    Prefs.saveReadSeqs(this.readSeqs)
+    void this.local?.setReadSeq(id, seq)
+    this.sessions = this.sessions.map(s => (s.id === id ? { ...s, unreadCount: 0 } : s))
+  }
+
+  unreadCountFor(s: Session): number {
+    const read = this.readSeqs[s.id]
+    if (read == null) return s.messageSeq
+    return Math.max(0, s.messageSeq - read)
+  }
+
+  isUnread(s: Session): boolean {
+    return this.unreadCountFor(s) > 0
+  }
+
+  // ---- drafts ----
+
+  draftFor(sessionId: string): ChatDraft {
+    if (!this.chatDrafts[sessionId]) {
+      this.chatDrafts[sessionId] = { text: '', attachments: [] }
     }
-    await this.refreshSessions()
+    return this.chatDrafts[sessionId]
   }
 
-  async renameSession(name: string, next: string) {
-    await agent.rename({ id: name, name: next })
-    if (this.activeName === name) this.activeName = next
-    await this.refreshSessions()
+  saveDraftText(sessionId: string, text: string) {
+    const d = this.draftFor(sessionId)
+    if (d.text === text) return
+    d.text = text
+    if (!text.trim() && !d.attachments.length) {
+      delete this.chatDrafts[sessionId]
+      void this.local?.saveDraft(sessionId, '', [])
+      return
+    }
+    void this.local?.saveDraft(sessionId, d.text, d.attachments)
   }
 
-  interrupt(name: string) {
-    return agent.interrupt({ id: name })
+  saveDraftAttachments(sessionId: string, attachments: ChatDraft['attachments']) {
+    const d = this.draftFor(sessionId)
+    d.attachments = [...attachments]
+    if (!d.text.trim() && !d.attachments.length) {
+      delete this.chatDrafts[sessionId]
+      void this.local?.saveDraft(sessionId, '', [])
+      return
+    }
+    void this.local?.saveDraft(sessionId, d.text, d.attachments)
   }
 
-  compact(name: string) {
-    return agent.compact({ id: name })
+  clearDraft(sessionId: string) {
+    delete this.chatDrafts[sessionId]
+    void this.local?.saveDraft(sessionId, '', [])
   }
 
-  switchModel(name: string, model: string, variant?: string) {
-    return agent.setModel({ id: name, model, variant: variant ?? '' })
+  // ---- provider draft ----
+
+  bumpProvidersRevision() {
+    this.providersRevision++
   }
 
-  setPreset(name: string, preset: string) {
-    return agent.updateSettings({ id: name, preset })
+  beginProviderDraft(existing: ProviderInfo | null) {
+    this.providerDraft = existing ? draftFromProvider(existing) : {
+      originalId: null,
+      id: '',
+      apiType: 'openai-compatible',
+      baseUrl: '',
+      apiKey: '',
+      models: [],
+    }
+  }
+
+  endProviderDraft() {
+    this.providerDraft = null
+  }
+
+  // ---- overlays ----
+
+  openOverlay(v: SessionOverlay) {
+    if (this.activeSessionId == null) return
+    this.sessionOverlay = v
+  }
+
+  closeOverlay() {
+    this.sessionOverlay = null
+  }
+
+  /** Close the open conversation; chat tab returns to the session list. */
+  closeSession() {
+    this.activeSessionId = null
+    this.sessionOverlay = null
+    const list = this.stackFor('chat')
+    if (list.length > 1) list.splice(1, list.length - 1)
+  }
+
+  bumpSessionRevision() {
+    this.sessionRevision++
+  }
+
+  switchTab(tab: SiderTab) {
+    this.siderTab = tab
+  }
+
+  /** Apply a settings/fork/rename result onto the live list. */
+  applySession(updated: Session) {
+    this.sessions = this.sessions.map(s => (s.id === updated.id ? updated : s))
+    this.bumpSessionRevision()
+  }
+
+  // ---- navigation stacks (per tab) ----
+
+  private stackFor(tab: SiderTab): AppPage[] {
+    return this.stacks[tab] ?? [rootPageFor(tab)]
+  }
+
+  get currentStack(): AppPage[] {
+    return this.stackFor(this.siderTab)
+  }
+
+  get topPage(): AppPage {
+    return this.currentStack[this.currentStack.length - 1]
+  }
+
+  /** Push a page; same-key pages replace at their existing depth. */
+  pushPage(page: AppPage) {
+    const list = this.currentStack
+    const idx = list.findIndex(p => p.key === page.key)
+    if (idx !== -1) list.splice(idx, list.length - idx)
+    list.push(page)
+  }
+
+  /** Push a SIBLING drill-in (replaces the current drill-in, keeps stack at
+   * [root, current] so the tablet split never shows two parallels). */
+  pushSibling(page: AppPage) {
+    const list = this.currentStack
+    if (list.length > 1) list.splice(1, list.length - 1)
+    this.pushPage(page)
+  }
+
+  /** Pop the top page; never pops below the root. */
+  popPage() {
+    const list = this.currentStack
+    if (list.length > 1) {
+      list.pop()
+      if (this.siderTab === 'chat' && list.length === 1) {
+        this.activeSessionId = null
+        this.sessionOverlay = null
+      }
+    }
+  }
+
+  get canPopPage(): boolean {
+    return this.currentStack.length > 1
   }
 }
-
-function makePart(init: { id: string; type: string; data: string }): Part {
-  return create(PartSchema, { id: init.id, type: init.type, data: init.data, messageId: '', seq: init.data.length })
-}
-
-export const store = new AgentStore()
