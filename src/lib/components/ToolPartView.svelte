@@ -115,7 +115,7 @@
             class="flex w-full items-center justify-between px-2 py-1 text-micro text-muted-foreground"
             onclick={() => (inputOpen = !inputOpen)}
           >
-            <span>{t('toolInputParams')}</span><span>{inputOpen ? '▾' : '▸'}</span>
+            <span>{t('toolInputParams')}</span>{#if inputOpen}<ChevronDown class="size-3" />{:else}<ChevronRight class="size-3" />{/if}
           </button>
           {#if inputOpen}
             <pre class="max-h-52 overflow-auto px-2 pb-2 font-mono text-micro">{prettyJson(input)}</pre>
@@ -131,7 +131,7 @@
             class="flex w-full items-center justify-between px-2 py-1 text-micro text-muted-foreground"
             onclick={() => (contentOpen = !contentOpen)}
           >
-            <span>{hasError ? t('error') : t('content')}</span><span>{contentOpen ? '▾' : '▸'}</span>
+            <span>{hasError ? t('error') : t('content')}</span>{#if contentOpen}<ChevronDown class="size-3" />{:else}<ChevronRight class="size-3" />{/if}
           </button>
           {#if contentOpen}
             <pre class="max-h-72 overflow-auto px-2 pb-2 font-mono text-micro whitespace-pre-wrap">{output}</pre>
@@ -165,7 +165,7 @@
             class="flex w-full items-center justify-between px-2 py-1 text-micro text-muted-foreground"
             onclick={() => (metaOpen = !metaOpen)}
           >
-            <span>{t('metadata')}</span><span>{metaOpen ? '▾' : '▸'}</span>
+            <span>{t('metadata')}</span>{#if metaOpen}<ChevronDown class="size-3" />{:else}<ChevronRight class="size-3" />{/if}
           </button>
           {#if metaOpen}
             <div class="max-h-40 space-y-1 overflow-auto px-2 pb-2 text-micro">

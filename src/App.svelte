@@ -10,12 +10,15 @@
   import type { LocalStore } from './lib/db'
   import { AppStore } from './lib/store.svelte'
   import { showErrorToast } from './lib/toast.svelte'
+  import { setAuthExpiredHandler } from './lib/events'
+  import { confirmDialog } from './lib/dialogs'
   import type { BackendCfg } from './lib/models'
   import { backendNameFor } from './lib/models'
   import Shell from './lib/Shell.svelte'
   import Overlays from './lib/components/Overlays.svelte'
   import { Button } from './lib/components/ui/button'
   import { Input } from './lib/components/ui/input'
+  import { Trash2, Plus, Eye, EyeOff, CircleDot, LayoutGrid } from '@lucide/svelte'
 
   type Phase = 'loading' | 'setup' | 'backends' | 'app'
 
@@ -48,6 +51,18 @@
     setLocale(l)
     localStorage.setItem('agent.uiLocale', l)
   }
+
+  // 401/403 anywhere → one-tap "sign in again" (flutter auth_gate.dart).
+  setAuthExpiredHandler(async () => {
+    if (phase !== 'app') return
+    const ok = await confirmDialog({
+      title: t('authExpiredTitle'),
+      body: t('authExpiredBody'),
+      confirmLabel: t('signInAgain'),
+      destructive: true,
+    })
+    if (ok) logout()
+  })
 
   onMount(() => {
     applyDark(Prefs.load().darkMode)
@@ -168,19 +183,19 @@
       <div class="space-y-2">
         {#each backends as b (b.baseUrl)}
           <div class="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
-            <span class="text-muted-foreground">{b.baseUrl === baseUrl ? '◉' : '▦'}</span>
+            {#if b.baseUrl === baseUrl}<CircleDot class="size-4 text-primary" />{:else}<LayoutGrid class="size-4 text-muted-foreground" />{/if}
             <span class="min-w-0 flex-1">
               <span class="block truncate text-body">{b.name || b.baseUrl}</span>
               <span class="block truncate text-micro text-muted-foreground">{b.baseUrl}</span>
             </span>
-            <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('deleteBackend')} onclick={() => void deleteBackend(b)}>🗑</button>
+            <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('deleteBackend')} onclick={() => void deleteBackend(b)}><Trash2 class="size-4" /></button>
             <Button size="sm" variant="outline" onclick={() => void switchBackend(b)}>{t('connect')}</Button>
           </div>
         {/each}
       </div>
       <div class="mt-4 border-t border-border pt-2">
         <button type="button" class="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left hover:bg-muted" onclick={logout}>
-          <span>＋</span>
+          <Plus class="size-4" />
           <span class="text-body">{t('addBackend')}</span>
         </button>
       </div>
@@ -202,7 +217,7 @@
             type="button"
             class="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground"
             onclick={() => (showToken = !showToken)}
-          >{showToken ? '🙈' : '👁'}</button>
+          >{#if showToken}<EyeOff class="size-4" />{:else}<Eye class="size-4" />{/if}</button>
         </span>
       </label>
       <Button class="w-full" disabled={!canConnect} onclick={() => void connect()}>

@@ -27,6 +27,9 @@ export interface Session {
   lastMessagePreview: string
   /** Monotonic server-owned counter; unread = messageSeq - readSeq. */
   messageSeq: number
+  /** Generic grouping key (empty = ungrouped). A subsession records its
+   *  parent's session name here. */
+  group: string
 }
 
 export function sessionName(s: Session): string {

@@ -9,9 +9,10 @@
   import { renderMarkdown } from '$lib/markdown'
   import { showToast } from '$lib/toast.svelte'
   import { cn } from '$lib/utils'
-  import { Copy, RefreshCw, Pencil, Undo2 } from '@lucide/svelte'
+  import { Copy, RefreshCw, Pencil, Undo2, Brain, ChevronDown, ChevronRight } from '@lucide/svelte'
   import ToolPartView from './ToolPartView.svelte'
   import MediaAttachment from './MediaAttachment.svelte'
+  import FileRefText from './FileRefText.svelte'
 
   let {
     msg,
@@ -74,9 +75,6 @@
     return `${d.getMonth() + 1}/${d.getDate()} ${hm}`
   }
 
-  function html(p: ChatPart): string {
-    return renderMarkdown(p.text)
-  }
 </script>
 
 {#if isStreaming && ordered.length === 0}
@@ -101,7 +99,7 @@
         {/if}
         {#each ordered as part (part.id)}
           {#if part.type === 'text'}
-            <div class="md-body w-full">{@html html(part)}</div>
+            <FileRefText text={part.text} {api} />
           {:else if part.type === 'file'}
             {@const a = { api, code: part.code ?? '', name: part.name ?? '', mime: part.mime, size: part.size ?? null }}
             <MediaAttachment {...a} />
@@ -112,12 +110,12 @@
                 class="flex w-full items-center gap-1.5 px-2 py-1 text-micro text-muted-foreground"
                 onclick={() => (reasoningOpen = !reasoningOpen)}
               >
-                <span>💭</span>
+                <Brain class="size-3.5" />
                 <span>{t('thinkLabel')}{isStreaming ? '…' : ''}</span>
                 {#if isStreaming}
                   <span class="size-2 animate-pulse rounded-full bg-warning"></span>
                 {/if}
-                <span class="ml-auto">{reasoningOpen ? '▾' : '▸'}</span>
+                <span class="ml-auto">{#if reasoningOpen}<ChevronDown class="size-3" />{:else}<ChevronRight class="size-3" />{/if}</span>
               </button>
               {#if reasoningOpen}
                 <div class="md-body px-2 pb-2 text-muted-foreground">{@html renderMarkdown(part.text)}</div>

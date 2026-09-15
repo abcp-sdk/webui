@@ -9,6 +9,7 @@
   import { sessionName } from '$lib/models'
   import SessionRow from '$lib/components/SessionRow.svelte'
   import { cn } from '$lib/utils'
+  import { X, ListChecks, Trash2, Search, Plus } from '@lucide/svelte'
 
   let { store }: PageProps = $props()
 
@@ -16,6 +17,27 @@
   let q = $state('')
   let selectMode = $state(false)
   let selected = $state<Set<string>>(new Set())
+  // Subsession tree: ids the user manually expanded (collapsed by default).
+  let expanded = $state<Set<string>>(new Set())
+  // Pull-to-refresh (flutter RefreshIndicator): refresh when dragged from top.
+  let refreshStartY: number | null = null
+  let refreshing = $state(false)
+
+  async function onTouchStart(e: TouchEvent) {
+    const el = e.currentTarget as HTMLElement
+    refreshStartY = el.scrollTop <= 0 ? e.touches[0]!.clientY : null
+  }
+
+  async function onTouchMove(e: TouchEvent) {
+    if (refreshStartY == null || refreshing) return
+    const dy = e.touches[0]!.clientY - refreshStartY
+    if (dy > 64) {
+      refreshing = true
+      refreshStartY = null
+      await store.refreshSessions()
+      refreshing = false
+    }
+  }
 
   const filtered = $derived.by(() => {
     if (!q.trim()) return store.sessions
@@ -27,6 +49,43 @@
         `${s.org}:${s.repo}:${s.branch}`.toLowerCase().includes(needle),
     )
   })
+
+  // Top-level sessions with subsessions (group == parent id) nested below when
+  // expanded; orphans are promoted so nothing disappears; flat while searching.
+  const display = $derived.by(() => {
+    const sessions = filtered
+    if (searching) return sessions
+    const byId = new Map(sessions.map(s => [s.id, s]))
+    const childrenOf = new Map<string, typeof sessions>()
+    const top: typeof sessions = []
+    for (const s of sessions) {
+      if (s.group && byId.has(s.group)) {
+        const list = childrenOf.get(s.group) ?? []
+        list.push(s)
+        childrenOf.set(s.group, list)
+      } else {
+        top.push(s)
+      }
+    }
+    const out: typeof sessions = []
+    for (const s of top) {
+      out.push(s)
+      const kids = childrenOf.get(s.id)
+      if (kids?.length && expanded.has(s.id)) out.push(...kids)
+    }
+    return out
+  })
+
+  function childCount(id: string): number {
+    return filtered.filter(s => s.group === id).length
+  }
+
+  function toggleExpand(id: string) {
+    const next = new Set(expanded)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    expanded = next
+  }
 
   function exitSelect() {
     selectMode = false
@@ -41,15 +100,15 @@
   }
 
   function toggleAll() {
-    if (selected.size === filtered.length) selected = new Set()
-    else selected = new Set(filtered.map(s => s.id))
+    if (selected.size === display.length) selected = new Set()
+    else selected = new Set(display.map(s => s.id))
   }
 
   async function deleteSelected() {
     if (!selected.size) return
     const ok = await confirmDialog({
       title: t('deleteSessionsTitle', { n: selected.size }),
-      body: t('deleteSessionsBody'),
+      body: t('deleteSessionsBody', { arg1: selected.size }),
       confirmLabel: t('delete'),
       destructive: true,
     })
@@ -71,8 +130,7 @@
     }
   }
 
-  async function sessionActions(sid: string) {
-    const s = store.sessionById(sid)
+  async function sessionActions(sid: string) {    const s = store.sessionById(sid)
     if (!s) return
     // Long-press bottom sheet equivalent: delete (+ mark-read when unread).
     const actions: string[] = []
@@ -149,11 +207,16 @@
     {t('recent')}
   </div>
 
-  <div class="min-h-0 flex-1 overflow-y-auto">
-    {#if filtered.length === 0}
+  <div
+    class="min-h-0 flex-1 overflow-y-auto"
+    ontouchstart={onTouchStart}
+    ontouchmove={onTouchMove}
+  >
+    {#if display.length === 0}
       <div class="p-4 text-center text-meta text-muted-foreground">{t('noSessions')}</div>
     {:else}
-      {#each filtered as s (s.id)}
+      {#each display as s (s.id)}
+        {@const isChild = !searching && !!s.group && filtered.some(x => x.id === s.group)}
         <SessionRow
           session={s}
           isActive={s.id === store.activeSessionId}
@@ -162,6 +225,10 @@
           unreadCount={store.unreadCountFor(s)}
           selectable={selectMode}
           selected={selected.has(s.id)}
+          childCount={isChild || searching ? 0 : childCount(s.id)}
+          expanded={expanded.has(s.id)}
+          isChild={isChild}
+          onToggleExpand={() => toggleExpand(s.id)}
           onTap={() => (selectMode ? toggle(s.id) : store.pickSession(s.id))}
           onLongPress={selectMode ? null : () => void sessionActions(s.id)}
         />

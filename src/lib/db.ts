@@ -171,6 +171,7 @@ export class LocalStore {
         branch TEXT NOT NULL DEFAULT '',
         server_tip_id TEXT NOT NULL DEFAULT '',
         message_seq INTEGER NOT NULL DEFAULT 0,
+        group_key TEXT NOT NULL DEFAULT '',
         last_message_at TEXT NOT NULL DEFAULT '',
         last_message_preview TEXT NOT NULL DEFAULT '',
         updated_at TEXT NOT NULL DEFAULT '',
@@ -203,6 +204,14 @@ export class LocalStore {
         seq INTEGER NOT NULL DEFAULT 0
       );
     `)
+    // v3 → v4: local_sessions gains the generic `group_key` column (session
+    // grouping / subsessions). CREATE TABLE IF NOT EXISTS never adds a column
+    // to an already-existing table, so migrate old databases explicitly.
+    try {
+      this.db.exec('ALTER TABLE local_sessions ADD COLUMN group_key TEXT NOT NULL DEFAULT \'\'')
+    } catch {
+      /* column already present */
+    }
   }
 
   // ---- sessions ----
@@ -212,20 +221,21 @@ export class LocalStore {
     for (const s of sessions) {
       this.run(
         `INSERT INTO local_sessions (id, model, variant, preset, system_prompt, max_turns,
-           locale, org, repo, branch, server_tip_id, message_seq, last_message_at,
+           locale, org, repo, branch, server_tip_id, message_seq, group_key, last_message_at,
            last_message_preview, updated_at, last_synced_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET model=excluded.model, variant=excluded.variant,
            preset=excluded.preset, system_prompt=excluded.system_prompt,
            max_turns=excluded.max_turns, locale=excluded.locale, org=excluded.org,
            repo=excluded.repo, branch=excluded.branch,
            server_tip_id=excluded.server_tip_id, message_seq=excluded.message_seq,
+           group_key=excluded.group_key,
            last_message_at=excluded.last_message_at,
            last_message_preview=excluded.last_message_preview,
            updated_at=excluded.updated_at, last_synced_at=excluded.last_synced_at`,
         [s.id, s.model, s.variant, s.preset, s.systemPrompt ?? '', s.maxTurns ?? 0,
           s.locale ?? '', s.org, s.repo, s.branch, s.tipId ?? '', s.messageSeq,
-          s.lastMessageAt, s.lastMessagePreview, s.updatedAt, Math.floor(Date.now() / 1000)],
+          s.group, s.lastMessageAt, s.lastMessagePreview, s.updatedAt, Math.floor(Date.now() / 1000)],
       )
     }
   }
@@ -245,6 +255,7 @@ export class LocalStore {
       branch: String(r['branch'] ?? ''),
       tipId: r['server_tip_id'] ? String(r['server_tip_id']) : undefined,
       messageSeq: Number(r['message_seq'] ?? 0),
+      group: String(r['group_key'] ?? ''),
       lastMessageAt: String(r['last_message_at'] ?? ''),
       lastMessagePreview: String(r['last_message_preview'] ?? ''),
       updatedAt: String(r['updated_at'] ?? ''),

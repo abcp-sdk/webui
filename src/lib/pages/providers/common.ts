@@ -34,27 +34,6 @@ export function capabilityLabelKey(capability: string): string {
   }
 }
 
-export function capabilityIcon(capability: string): string {
-  switch (capability) {
-    case 'image':
-      return '🖼'
-    case 'video':
-      return '🎬'
-    case 'speech':
-      return '〰'
-    case 'transcription':
-      return '🎙'
-    case 'embedding':
-      return '✳'
-    case 'reranking':
-      return '≡'
-    case 'realtime':
-      return '⚡'
-    default:
-      return '💬'
-  }
-}
-
 export function apiTypeLabelKey(apiType: string): string {
   switch (apiType) {
     case 'openai-compatible':

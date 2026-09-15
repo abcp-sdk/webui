@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus } from '@lucide/svelte'
+  import { Plus, Sparkles } from '@lucide/svelte'
   // ProviderForm — web port of flutter ProviderFormScreen: edit/create a TEXT
   // provider (template picker from models.dev, id/apiType/baseUrl/key, model
   // rows with the model drill-in form).
@@ -137,7 +137,7 @@
         class="flex h-10 w-full items-center gap-2 rounded-md border border-input px-3 text-left hover:bg-muted"
         onclick={() => void openTemplates()}
       >
-        <span class="text-muted-foreground">✨</span>
+        <Sparkles class="size-4 text-primary" />
         <span class="truncate text-meta text-muted-foreground">{t('providerTemplateHint')}</span>
       </button>
 

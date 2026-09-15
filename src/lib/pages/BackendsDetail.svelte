@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Trash2 } from '@lucide/svelte'
+  import { Trash2, CircleDot, LayoutGrid } from '@lucide/svelte'
   // BackendsDetail — web port of flutter config.dart _BackendsDetail: the
   // saved-connections manager (switch / delete / add).
   import type { AppStore } from '$lib/store.svelte'
@@ -38,9 +38,7 @@
   <div class="space-y-2">
     {#each backends as b (b.baseUrl)}
       <div class="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
-        <span class={activeBase === b.baseUrl ? 'text-primary' : 'text-muted-foreground'}>
-          {activeBase === b.baseUrl ? '◉' : '▦'}
-        </span>
+        {#if activeBase === b.baseUrl}<CircleDot class="size-4 shrink-0 text-primary" />{:else}<LayoutGrid class="size-4 shrink-0 text-muted-foreground" />{/if}
         <span class="min-w-0 flex-1">
           <span class="block truncate text-body">{b.name || b.baseUrl}</span>
           <span class="block truncate text-micro text-muted-foreground">{b.baseUrl}</span>

@@ -5,7 +5,8 @@
   import type { PageProps } from '$lib/page-props'
   import { t } from '$lib/i18n.svelte'
   import { showToast, showErrorToast } from '$lib/toast.svelte'
-  import { MULTIMODAL_CAPABILITIES, capabilityIcon, capabilityLabelKey, GATEWAY_API_TYPE, GATEWAY_PROVIDER_ID } from './common'
+  import { MULTIMODAL_CAPABILITIES, capabilityLabelKey, GATEWAY_API_TYPE, GATEWAY_PROVIDER_ID } from './common'
+  import CapabilityIcon from './CapabilityIcon.svelte'
 
   let { store, showBack = false, modelId = null }: PageProps & { modelId?: string | null } = $props()
 
@@ -117,7 +118,7 @@
                 type="button"
                 class="flex items-center gap-1 rounded-full border px-2.5 py-1 text-micro {modelType === c ? 'border-primary/50 bg-primary/15 text-primary' : 'border-border text-muted-foreground hover:bg-muted'}"
                 onclick={() => (modelType = c)}
-              >{capabilityIcon(c)} {t(capabilityLabelKey(c))}</button>
+              ><CapabilityIcon capability={c} size={12} /> {t(capabilityLabelKey(c))}</button>
             {/each}
           </div>
         </div>

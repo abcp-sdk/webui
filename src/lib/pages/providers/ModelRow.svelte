@@ -4,7 +4,8 @@
   // (kind icon, mono id, context/kind tag, remove).
   import type { ProviderModel } from '$lib/models'
   import { t } from '$lib/i18n.svelte'
-  import { capabilityIcon, capabilityLabelKey } from './common'
+  import { capabilityLabelKey } from './common'
+  import CapabilityIcon from './CapabilityIcon.svelte'
 
   let {
     model,
@@ -22,7 +23,7 @@
 
 <div class="mb-1 flex items-center gap-2 rounded-md border border-border/60 bg-muted/40 py-1.5 pr-1.5 pl-3">
   <button type="button" class="flex min-w-0 flex-1 items-center gap-2 text-left" onclick={onTap}>
-    <span class="text-muted-foreground">{capabilityIcon(type)}</span>
+    <CapabilityIcon capability={type} size={14} />
     <span class="min-w-0 flex-1 truncate font-mono text-meta font-semibold">{model.id}</span>
     <span class="shrink-0 text-micro text-muted-foreground">
       {isText ? `${t('capText')} · ${model.contextLimit}` : t(capabilityLabelKey(type))}

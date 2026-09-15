@@ -2,7 +2,7 @@
 // @abcp/agent-sdk (codegenv2: Struct→JsonObject, int64→bigint).
 import type { AgentClient } from './agent'
 import { createAgentClient } from './agent'
-import { makeStreamEvent, type StreamEvent } from './events'
+import { fireAuthExpired, isAuthError, makeStreamEvent, type StreamEvent } from './events'
 import type {
   MailboxEntry,
   Message,
@@ -67,30 +67,7 @@ function structToJson(v: unknown): Record<string, unknown> {
   return out
 }
 
-export function sessionFromPb(s: {
-  name: string
-  org: string
-  repo: string
-  branch: string
-  model: string
-  variant: string
-  preset: string
-  tipId: string
-  maxTurns: number
-  systemPrompt: string
-  locale: string
-  inputTokens: number
-  outputTokens: number
-  totalTokens: number
-  lastInputTokens: number
-  lastOutputTokens: number
-  createdAt: string
-  updatedAt: string
-  unreadCount: number
-  lastMessageAt: string
-  lastMessagePreview: string
-  messageSeq: number
-}): Session {
+export function sessionFromPb(s: import('@abcp/agent-sdk').Session): Session {
   return {
     id: s.name,
     org: s.org,
@@ -114,6 +91,7 @@ export function sessionFromPb(s: {
     lastMessageAt: s.lastMessageAt,
     lastMessagePreview: s.lastMessagePreview,
     messageSeq: s.messageSeq,
+    group: s.group,
   }
 }
 
@@ -235,11 +213,23 @@ export class AgentApi {
     return new AgentApi(baseUrl, token)
   }
 
+  /** Wrap an RPC so 401/403 anywhere raises the global auth-expired dialog. */
+  private async _guard<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn()
+    } catch (e) {
+      if (isAuthError(e)) fireAuthExpired('expired')
+      throw e
+    }
+  }
+
   // ---- sessions ----
 
   async listSessions(): Promise<Session[]> {
-    const r = await this._c.listSessions({})
-    return r.sessions.map(sessionFromPb)
+    return await this._guard(async () => {
+      const r = await this._c.listSessions({})
+      return r.sessions.map(sessionFromPb)
+    })
   }
 
   async createSession(params: Record<string, unknown>): Promise<Session> {
@@ -273,6 +263,7 @@ export class AgentApi {
       lastMessageAt: '',
       lastMessagePreview: '',
       messageSeq: 0,
+      group: '',
     }
   }
 
@@ -366,7 +357,7 @@ export class AgentApi {
     const maxTurns = settings['max_turns'] as number | undefined
     const model = (settings['model'] as string) || ''
     const preset = (settings['preset'] as string) || ''
-    const r = await this._c.updateSettings({
+    const r = await this._guard(() => this._c.updateSettings({
       id,
       ...(model ? { model } : {}),
       ...(preset ? { preset } : {}),
@@ -374,12 +365,12 @@ export class AgentApi {
       locale: (settings['locale'] as string) || '',
       variant: (settings['variant'] as string) || '',
       ...(maxTurns && maxTurns > 0 ? { maxTurns } : {}),
-    })
+    }))
     return r.session ? sessionFromPb(r.session) : emptySession('')
   }
 
   async fork(id: string, branch: string): Promise<Session> {
-    const r = await this._c.fork({ id, name: branch })
+    const r = await this._guard(() => this._c.fork({ id, name: branch }))
     return r.session ? sessionFromPb(r.session) : emptySession('')
   }
 
@@ -451,7 +442,7 @@ export class AgentApi {
   }
 
   async providers(): Promise<Record<string, ProviderInfo>> {
-    const r = await this._c.listProviders({})
+    const r = await this._guard(() => this._c.listProviders({}))
     const out: Record<string, ProviderInfo> = {}
     for (const p of r.providers) {
       out[p.providerId] = {
@@ -532,7 +523,7 @@ export class AgentApi {
 
   async models(providerId: string): Promise<ModelInfo[]> {
     if (!providerId) return []
-    const r = await this._c.listModels({ providerId })
+    const r = await this._guard(() => this._c.listModels({ providerId }))
     return r.models.map(m => ({
       id: m.id,
       name: m.name,
@@ -547,7 +538,7 @@ export class AgentApi {
   }
 
   async presets(locale?: string): Promise<Preset[]> {
-    const r = await this._c.listPresets({ locale: locale ?? '' })
+    const r = await this._guard(() => this._c.listPresets({ locale: locale ?? '' }))
     return r.presets.map(p => ({
       id: p.id,
       systemPrompt: p.systemPrompt,
@@ -574,7 +565,7 @@ export class AgentApi {
   }
 
   async tools(locale?: string): Promise<ToolInfo[]> {
-    const r = await this._c.listTools({ locale: locale ?? '' })
+    const r = await this._guard(() => this._c.listTools({ locale: locale ?? '' }))
     return r.tools.map(t => ({
       name: t.name,
       description: t.description,
@@ -607,7 +598,7 @@ export class AgentApi {
   }
 
   async config(key: string): Promise<string> {
-    const r = await this._c.getConfig({ key })
+    const r = await this._guard(() => this._c.getConfig({ key }))
     return r.value
   }
 
@@ -643,6 +634,7 @@ export function emptySession(id: string): Session {
     lastMessageAt: '',
     lastMessagePreview: '',
     messageSeq: 0,
+    group: '',
   }
 }
 

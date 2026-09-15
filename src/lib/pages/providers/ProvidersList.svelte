@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, ChevronRight } from '@lucide/svelte'
+  import { Plus, ChevronRight, LayoutGrid, CircleDot, Circle } from '@lucide/svelte'
   // ProvidersList — web port of flutter ProvidersListScreen: the two sections
   // (text providers + the single Vercel-compatible gateway), default-model
   // pick (sets `default_model` config), add/edit entry points.
@@ -143,7 +143,7 @@
       {/if}
       {#each textProviders as p (p.providerId)}
         <button type="button" class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted" onclick={() => edit(p)}>
-          <span class="w-5 text-center text-primary">▦</span>
+          <LayoutGrid class="size-5 shrink-0 text-primary" />
           <span class="min-w-0 flex-1">
             <span class="block text-body font-medium">{p.providerId}</span>
             <span class="block truncate text-micro text-muted-foreground">{apiTypeLabel(p.apiType)} · {t('modelsCount', { n: p.models.length })}</span>
@@ -181,7 +181,7 @@
           class="flex w-full items-center gap-3 px-3 py-2.5 text-left text-meta hover:bg-muted"
           onclick={() => void pickDefault(ref)}
         >
-          <span>{ref === defaultModel ? '◉' : '○'}</span>
+          {#if ref === defaultModel}<CircleDot class="size-4 text-primary" />{:else}<Circle class="size-4 text-muted-foreground" />{/if}
           <span class="font-mono">{ref || t('none')}</span>
         </button>
       {/each}

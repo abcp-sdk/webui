@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, ChevronRight } from '@lucide/svelte'
+  import { Plus, ChevronRight, Palette, ArrowLeftRight, LayoutGrid, Sparkles, Wrench, Globe, Languages, CircleDot } from '@lucide/svelte'
   // Config — web port of flutter screens/config.dart: the settings root list
   // (appearance / backend switch / providers / presets / tools / language) and
   // the drill-in details (appearance, backends, presets, tools).
@@ -63,14 +63,14 @@
     const value = Prefs.effectiveAgentLocale(getLocale() === 'zh')
     try {
       await store.api.setConfigKey('locale', value)
-      showToast(t('agentLocaleApplied', { value }))
+      showToast(t('agentLocaleApplied', { l: value }))
     } catch (e) {
       showErrorToast(String(e))
     }
   }
 
   interface Row {
-    icon: string
+    icon: any
     label: string
     onTap: () => void
     destructive?: boolean
@@ -78,26 +78,26 @@
 
   const sections = $derived.by(() => {
     const appearance: Row[] = [
-      { icon: '🎨', label: t('appearance'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_appearance', id: 'appearance' }) },
+      { icon: Palette, label: t('appearance'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_appearance', id: 'appearance' }) },
     ]
     const backend: Row[] = [
       {
-        icon: '⇄',
+        icon: ArrowLeftRight,
         label: t('switchBackend'),
         onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_backends', id: 'backends' }),
         destructive: true,
       },
     ]
     const llm: Row[] = [
-      { icon: '▦', label: t('llmProviders'), onTap: () => store.pushSibling({ kind: 'providers_list', key: 'providers_list' }) },
-      { icon: '✨', label: t('presets'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_presets', id: 'presets' }) },
+      { icon: LayoutGrid, label: t('llmProviders'), onTap: () => store.pushSibling({ kind: 'providers_list', key: 'providers_list' }) },
+      { icon: Sparkles, label: t('presets'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_presets', id: 'presets' }) },
     ]
     const workspace: Row[] = [
-      { icon: '🔧', label: t('tools'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_tools', id: 'tools' }) },
+      { icon: Wrench, label: t('tools'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_tools', id: 'tools' }) },
     ]
     const language: Row[] = [
-      { icon: '🌐', label: t('language'), onTap: () => (pickLocaleOpen = true) },
-      { icon: '🈶', label: t('agentLocale'), onTap: () => (pickAgentLocaleOpen = true) },
+      { icon: Globe, label: t('language'), onTap: () => (pickLocaleOpen = true) },
+      { icon: Languages, label: t('agentLocale'), onTap: () => (pickAgentLocaleOpen = true) },
     ]
     return [
       { title: t('appearance'), rows: appearance },
@@ -132,7 +132,7 @@
             class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted {r.destructive ? 'text-destructive font-semibold' : ''}"
             onclick={r.onTap}
           >
-            <span class="w-5 text-center">{r.icon}</span>
+            <r.icon class="size-5 shrink-0 {r.destructive ? 'text-destructive' : 'text-muted-foreground'}" />
             <span class="flex-1 text-body">{r.label}</span>
             <ChevronRight class="size-4 text-muted-foreground" />
           </button>
@@ -187,7 +187,7 @@
               pickLocaleOpen = false
             }}
           >
-            <span>{getLocale() === code ? '◉' : '○'}</span> {label}
+            {#if getLocale() === code}<CircleDot class="size-4 text-primary" />{:else}<span class="size-4 rounded-full border border-muted-foreground/50"></span>{/if} {label}
           </button>
         {/each}
       </div>
@@ -205,7 +205,7 @@
             class="flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left text-body hover:bg-muted"
             onclick={() => void pickAgentLocale(code)}
           >
-            <span>{Prefs.loadAgentLocale() === code ? '◉' : '○'}</span> {label}
+            {#if Prefs.loadAgentLocale() === code}<CircleDot class="size-4 text-primary" />{:else}<span class="size-4 rounded-full border border-muted-foreground/50"></span>{/if} {label}
           </button>
         {/each}
       </div>
