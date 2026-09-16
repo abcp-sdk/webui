@@ -120,7 +120,7 @@
         <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
       </div>
     {:else}
-      <div class="px-4 pt-4 pb-1 text-micro font-semibold tracking-wider text-muted-foreground uppercase">{t('providersSection')}</div>
+      <div class="px-4 pt-4 pb-1 text-micro font-semibold tracking-wider text-muted-foreground">{t('providersSection')}</div>
 
       <!-- default model tile -->
       <button

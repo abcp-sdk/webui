@@ -1,12 +1,15 @@
 <script lang="ts">
-  // SessionRow — web port of flutter widgets/session_row.dart: a selectable
-  // list row (title, preview subtitle, fixed-width timestamp, unread badge,
-  // subsession badge + expand chevron, child indent).
+  // SessionRow — port of flutter widgets/session_row.dart. Geometry, type
+  // scale, colours and the relative-time label are kept identical to the
+  // Flutter implementation: avatar (honeycomb identicon) | title row
+  // (name / subsession pill / expand chip / fixed 52px right-aligned stamp) |
+  // preview row (subtitle + unread badge), 12px horizontal / 8px vertical.
   import type { Session } from '$lib/models'
   import { sessionName } from '$lib/models'
   import { t } from '$lib/i18n.svelte'
   import { cn } from '$lib/utils'
   import { Check, ChevronDown, ChevronUp } from '@lucide/svelte'
+  import ChatAvatar from '$lib/components/ChatAvatar.svelte'
 
   let {
     session,
@@ -38,28 +41,27 @@
     onToggleExpand?: () => void
   } = $props()
 
+  /** WeChat-style relative label — one-to-one with flutter `wechatTime`. */
   function fmtTime(iso: string): string {
     if (!iso) return ''
     const d = new Date(iso)
     if (isNaN(d.getTime())) return ''
-    const diff = Date.now() - d.getTime()
-    const mins = Math.floor(diff / 60000)
+    const mins = Math.floor((Date.now() - d.getTime()) / 60000)
     if (mins < 1) return t('timeJustNow')
     if (mins < 60) return t('timeMinAgo', { arg1: mins })
-    const hours = Math.floor(mins / 60)
-    if (hours < 24) return t('timeHour', { arg1: hours })
-    const days = Math.floor(hours / 24)
-    if (days < 7) return t('timeDay', { arg1: days })
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+    if (mins < 60 * 24) return t('timeHour', { arg1: Math.floor(mins / 60) })
+    if (mins < 60 * 24 * 7) return t('timeDay', { arg1: Math.floor(mins / (60 * 24)) })
+    return `${d.getMonth() + 1}/${d.getDate()}`
   }
+
+  const stamp = $derived(fmtTime(session.lastMessageAt || session.updatedAt))
 </script>
 
 <button
   type="button"
   class={cn(
-    'flex w-full items-center gap-2.5 px-4 py-2.5 text-left transition-colors',
-    !selected && (isActive ? 'bg-primary/10' : 'hover:bg-muted/50'),
-    selected && 'bg-primary/15',
+    'flex w-full items-center px-3 py-2 text-left transition-colors',
+    selected ? 'bg-primary/14' : isActive ? 'bg-primary/10' : 'hover:bg-muted/50',
   )}
   onclick={onTap}
   oncontextmenu={e => {
@@ -70,32 +72,43 @@
   }}
 >
   {#if isChild}
-    <span class="ml-2 h-[34px] w-0.5 shrink-0 rounded bg-muted-foreground/35"></span>
+    <span class="flex w-2.5 shrink-0 justify-center">
+      <span class="h-[34px] w-0.5 bg-muted-foreground/35"></span>
+    </span>
+    <span class="w-1 shrink-0"></span>
   {/if}
   {#if selectable}
     <span
       class={cn(
-        'flex size-4 shrink-0 items-center justify-center rounded-full border',
-        selected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/50',
+        'flex size-6 shrink-0 items-center justify-center rounded-full',
+        selected ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
       )}
     >
-      {#if selected}<Check class="size-3" />{/if}
-    </span>
-  {/if}
-  <span class="min-w-0 flex-1">
-    <span class="flex items-center gap-1">
-      {#if unread && !selectable}
-        <span class="size-1.5 shrink-0 rounded-full bg-primary"></span>
+      {#if selected}
+        <Check class="size-4" />
+      {:else}
+        <span class="size-4 rounded-full border border-muted-foreground/50"></span>
       {/if}
-      <span class="truncate text-body font-medium" class:text-primary={isActive}>{sessionName(session)}</span>
+    </span>
+  {:else}
+    <ChatAvatar seed={session.id} size={40} />
+  {/if}
+  <span class="w-3 shrink-0"></span>
+  <span class="min-w-0 flex-1">
+    <span class="flex items-center">
+      <span class="min-w-0 flex-1 truncate text-meta font-semibold" class:text-primary={isActive}
+        >{sessionName(session)}</span
+      >
       {#if session.group && !isChild}
-        <span class="shrink-0 rounded-full bg-primary/14 px-1.5 py-px text-[9px] text-primary">{t('subsessionBadge')}</span>
+        <span class="ml-1 shrink-0 rounded-full bg-primary/14 px-1.5 py-px text-[9px] leading-none text-primary"
+          >{t('subsessionBadge')}</span
+        >
       {/if}
       {#if childCount > 0}
         <span
           role="button"
           tabindex="0"
-          class="flex shrink-0 cursor-pointer items-center rounded-full bg-muted-foreground/14 px-1.5 py-px text-[9px] text-muted-foreground"
+          class="ml-1 flex shrink-0 cursor-pointer items-center rounded-full bg-muted-foreground/14 px-1.5 py-px text-[9px] leading-none text-muted-foreground"
           onclick={e => {
             e.stopPropagation()
             onToggleExpand?.()
@@ -109,17 +122,19 @@
           }}
         >
           {t('subsessionCount', { arg1: childCount })}
-          {#if expanded}<ChevronUp class="size-3" />{:else}<ChevronDown class="size-3" />{/if}
+          {#if expanded}<ChevronUp class="size-[13px]" />{:else}<ChevronDown class="size-[13px]" />{/if}
         </span>
       {/if}
-      <!-- Fixed-width, right-aligned timestamp slot so every trailing chip ends
-           at the same x on every row. -->
-      <span class="ml-auto w-[52px] shrink-0 text-right text-micro text-muted-foreground">{fmtTime(session.lastMessageAt || session.updatedAt)}</span>
+      <!-- Fixed-width right-aligned slot: every trailing chip ends at the same
+           x on every row, exactly like the Flutter implementation. -->
+      <span class="w-[52px] shrink-0 text-right text-micro text-muted-foreground" style="line-height:1.4">{stamp}</span>
     </span>
-    <span class="mt-0.5 flex items-center gap-2">
-      <span class="min-w-0 flex-1 truncate text-meta text-muted-foreground">{subtitle || session.id}</span>
+    <span class="mt-0.5 flex items-center">
+      <span class="min-w-0 flex-1 truncate text-micro text-muted-foreground">{subtitle || session.id}</span>
       {#if unread && !isActive && unreadCount > 0}
-        <span class="shrink-0 rounded-full bg-destructive px-1.5 py-px text-[10px] font-semibold leading-4 text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>
+        <span class="ml-1 flex h-[18px] shrink-0 items-center rounded-full bg-destructive px-1.5 text-[10px] leading-none font-semibold text-white"
+          >{unreadCount > 99 ? '99+' : unreadCount}</span
+        >
       {/if}
     </span>
   </span>

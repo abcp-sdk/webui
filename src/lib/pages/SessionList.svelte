@@ -203,7 +203,8 @@
     </div>
   {/if}
 
-  <div class="px-4 pt-2 pb-1 text-micro font-semibold tracking-wider text-muted-foreground uppercase">
+  <!-- Flutter keeps this label verbatim (no uppercase). -->
+  <div class="px-4 pt-2 pb-1 text-micro font-semibold tracking-wider text-muted-foreground">
     {t('recent')}
   </div>
 
