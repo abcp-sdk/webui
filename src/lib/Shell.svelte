@@ -27,6 +27,7 @@
     onSwitchBackend,
     onBackendSwitched,
     onUiLocale,
+    onAddUser,
   }: Omit<PageProps, 'showBack' | 'initialId' | 'overlay' | 'modelId'> = $props()
 
   let width = $state(typeof window !== 'undefined' ? window.innerWidth : 1280)
@@ -114,6 +115,7 @@
           {onSwitchBackend}
           {onBackendSwitched}
           {onUiLocale}
+          {onAddUser}
           showBack={p.isTop}
           initialId={p.page.kind === 'config_sub' ? p.page.id : undefined}
           overlay={p.page.kind === 'chat_overlay' ? p.page.overlay : undefined}

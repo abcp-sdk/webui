@@ -25,7 +25,8 @@
   let phase = $state<Phase>('loading')
   let baseUrl = $state('')
   let token = $state('')
-  let dark = $state(true)
+  // Light is the default appearance (every client).
+  let dark = $state(false)
   let store = $state<AppStore | null>(null)
   let local: LocalStore | null = null
 
@@ -178,6 +179,7 @@
     onSwitchBackend={openBackends}
     onBackendSwitched={switchBackend}
     onUiLocale={setUiLocale}
+    onAddUser={logout}
   />
 {:else if phase === 'backends'}
   <div class="flex h-full flex-col">

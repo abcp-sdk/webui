@@ -9,6 +9,9 @@ export interface PageProps {
   onSwitchBackend?: (() => void) | null
   onBackendSwitched?: ((b: BackendCfg) => void) | null
   onUiLocale?: ((l: 'zh' | 'en') => void) | null
+  /** Clears the active connection and lands on the setup form so the user can
+   *  sign in as someone else (Flutter's `onAddUser`). */
+  onAddUser?: (() => void) | null
   showBack?: boolean
   initialId?: string
   overlay?: 'mailbox'

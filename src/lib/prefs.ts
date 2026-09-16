@@ -21,7 +21,8 @@ export const Prefs = {
     return {
       baseUrl: localStorage.getItem(K_BASE),
       token: localStorage.getItem(K_TOKEN),
-      darkMode: localStorage.getItem(K_DARK) !== '0',
+      // Light is the default appearance: only an explicit '1' enables dark.
+      darkMode: localStorage.getItem(K_DARK) === '1',
     }
   },
 

@@ -24,6 +24,7 @@
     onDarkMode,
     onSwitchBackend,
     onBackendSwitched,
+    onAddUser,
     showBack = false,
     initialId,
   }: PageProps = $props()
@@ -163,7 +164,7 @@
 {/snippet}
 
 {#snippet backendsDetail()}
-  <BackendsDetail {store} onBackendSwitched={b => onBackendSwitched?.(b)} />
+  <BackendsDetail {store} onBackendSwitched={b => onBackendSwitched?.(b)} {onAddUser} />
 {/snippet}
 
 {#snippet presetsDetail()}

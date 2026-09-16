@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Trash2, CircleDot, LayoutGrid } from '@lucide/svelte'
+  import { Trash2, CircleDot, LayoutGrid, Plus } from '@lucide/svelte'
   // BackendsDetail — web port of flutter config.dart _BackendsDetail: the
   // saved-connections manager (switch / delete / add).
   import type { AppStore } from '$lib/store.svelte'
@@ -12,9 +12,11 @@
   let {
     store,
     onBackendSwitched,
+    onAddUser,
   }: {
     store: AppStore
     onBackendSwitched?: ((b: BackendCfg) => void) | null
+    onAddUser?: (() => void) | null
   } = $props()
 
   let backends = $state<BackendCfg[]>([])
@@ -49,5 +51,21 @@
         </Button>
       </div>
     {/each}
+  </div>
+
+  <!-- Add another user: clears the active connection and returns to the setup
+       form (mirrors Flutter's addBackend entry). -->
+  <div class="mt-4 border-t border-border pt-2">
+    <button
+      type="button"
+      class="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left hover:bg-muted"
+      onclick={() => onAddUser?.()}
+    >
+      <Plus class="size-[18px] shrink-0 text-primary" />
+      <span class="min-w-0 flex-1">
+        <span class="block text-body">{t('addBackend')}</span>
+        <span class="block truncate text-micro text-muted-foreground">{t('addBackendHint')}</span>
+      </span>
+    </button>
   </div>
 </div>
