@@ -441,6 +441,17 @@ export class AgentApi {
     })
   }
 
+  /** Server capability matrix (ListProvidersCatalog): canonical api type ->
+   * capabilities a model of that type may declare. */
+  async providerCatalog(): Promise<Record<string, string[]>> {
+    const r = await this._guard(() => this._c.listProvidersCatalog({}))
+    const out: Record<string, string[]> = {}
+    for (const [k, v] of Object.entries(r.apiTypes)) {
+      out[k] = [...v.capabilities]
+    }
+    return out
+  }
+
   async providers(): Promise<Record<string, ProviderInfo>> {
     const r = await this._guard(() => this._c.listProviders({}))
     const out: Record<string, ProviderInfo> = {}

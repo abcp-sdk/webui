@@ -2,11 +2,17 @@
 export const GATEWAY_API_TYPE = 'vercel-compatible-gateway'
 export const GATEWAY_PROVIDER_ID = 'gateway'
 
-/** Text-provider api types (a text provider carries ONLY text models). */
-export const TEXT_API_TYPES = ['openai-compatible', 'openai', 'anthropic', 'gemini'] as const
-
-/** Multimodal capabilities for the gateway model TEST selector. */
-export const MULTIMODAL_CAPABILITIES = ['text', 'image', 'video', 'speech', 'transcription'] as const
+/** Capability tags (mirrors the server matrix; used when a form needs the
+ * full list, e.g. the gateway model whose kind comes from discovery). */
+export const MULTIMODAL_CAPABILITIES = [
+  'text',
+  'image',
+  'video',
+  'speech',
+  'transcription',
+  'embedding',
+  'rerank',
+] as const
 
 export function isGatewayProvider(apiType: string): boolean {
   return apiType === GATEWAY_API_TYPE
@@ -43,7 +49,12 @@ export function apiTypeLabelKey(apiType: string): string {
     case 'anthropic':
       return 'apiTypeAnthropic'
     case 'gemini':
+    case 'google':
       return 'apiTypeGemini'
+    case 'deepseek':
+      return 'apiTypeDeepseek'
+    case 'cohere':
+      return 'apiTypeCohere'
     case GATEWAY_API_TYPE:
       return 'apiTypeGateway'
     default:

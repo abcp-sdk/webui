@@ -6,6 +6,7 @@
   import { t } from '$lib/i18n.svelte'
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import { loadModelsDev } from '$lib/modelsdev'
+  import { capabilityLabelKey } from './common'
 
   let { store, showBack = false, modelId = null }: PageProps & { modelId?: string | null } = $props()
 
@@ -16,14 +17,27 @@
   let mid = $state('')
   let name = $state('')
   let ctx = $state('')
+  // Declared capability (model_type); options come from the capability matrix
+  // for the DRAFT provider's api type.
+  let capability = $state('text')
   let testing = $state(false)
   let testOk = $state<boolean | null>(null)
   let testMsg = $state('')
+
+  const capabilities = $derived.by(() => {
+    const d = store.providerDraft
+    if (!d) return ['text']
+    return store.providerCatalog[d.apiType] ?? ['text']
+  })
 
   $effect(() => {
     mid = existing?.id ?? ''
     name = existing?.name ?? ''
     ctx = existing && (existing.contextLimit ?? 0) > 0 ? String(existing.contextLimit) : ''
+    capability =
+      existing && capabilities.includes(existing.modelType)
+        ? existing.modelType
+        : 'text'
   })
 
   const canSave = $derived(mid.trim() !== '')
@@ -33,8 +47,9 @@
     if (!d) return
     const id = mid.trim()
     if (!id) return
-    const c = parseInt(ctx.trim())
-    if (!c || c <= 0) {
+    // context_limit is required (> 0) for TEXT models only.
+    const c = capability === 'text' ? parseInt(ctx.trim()) : 0
+    if (capability === 'text' && (!c || c <= 0)) {
       showToast(t('contextLengthRequired'))
       return
     }
@@ -42,7 +57,7 @@
     d.models = d.models.filter(m => m.id !== id)
     d.models = [
       ...d.models,
-      { id, name: name.trim() || id, contextLimit: c, modelType: '' },
+      { id, name: name.trim() || id, contextLimit: c, modelType: capability },
     ]
     store.popPage()
   }
@@ -60,7 +75,7 @@
         apiKey: d.apiKey,
         providerId: d.id,
         model: `${d.id}/${mid.trim()}`,
-        capability: 'text',
+        capability,
       })
       testOk = r.ok
       testMsg = r.ok ? t('testModelOk', { r: String(r.result ?? '') }) : String(r.result ?? t('testFailed'))
@@ -120,10 +135,23 @@
       </label>
 
       <label class="block">
-        <span class="mb-1 block text-meta text-muted-foreground">{t('contextLengthLabel')}</span>
-        <input bind:value={ctx} type="number" min="1" class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
-        <span class="mt-1 block text-micro text-muted-foreground">{t('contextOptional')}</span>
+        <span class="mb-1 block text-meta text-muted-foreground">{t('capabilityLabel')}</span>
+        <select bind:value={capability} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring">
+          {#each capabilities as cap (cap)}
+            <option value={cap}>{t(capabilityLabelKey(cap))}</option>
+          {/each}
+        </select>
       </label>
+
+      {#if capability === 'text'}
+        <label class="block">
+          <span class="mb-1 block text-meta text-muted-foreground">{t('contextLengthLabel')}</span>
+          <input bind:value={ctx} type="number" min="1" class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+          <span class="mt-1 block text-micro text-muted-foreground">{t('contextOptional')}</span>
+        </label>
+      {:else}
+        <p class="text-micro text-muted-foreground">{t('nonTextModelHint')}</p>
+      {/if}
 
       <div class="pt-2">
         <button

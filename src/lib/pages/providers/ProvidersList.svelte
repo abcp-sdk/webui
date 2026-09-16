@@ -1,13 +1,13 @@
 <script lang="ts">
   import { Plus, ChevronRight, LayoutGrid, CircleDot, Circle } from '@lucide/svelte'
   // ProvidersList — web port of flutter ProvidersListScreen: the two sections
-  // (text providers + the single Vercel-compatible gateway), default-model
+  // (every provider including gateways), default-model
   // pick (sets `default_model` config), add/edit entry points.
   import type { PageProps } from '$lib/page-props'
   import type { ProviderInfo } from '$lib/models'
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast } from '$lib/toast.svelte'
-  import { GATEWAY_API_TYPE, GATEWAY_PROVIDER_ID, apiTypeLabelKey } from './common'
+  import { GATEWAY_API_TYPE, GATEWAY_PROVIDER_ID, isGatewayProvider, apiTypeLabelKey } from './common'
 
   let { store, showBack = false }: PageProps = $props()
 
@@ -49,15 +49,13 @@
     loading = false
   }
 
-  const all = $derived(Object.values(providers))
-  const textProviders = $derived(
-    all.filter(p => p.apiType !== GATEWAY_API_TYPE).sort((a, b) => (a.providerId < b.providerId ? -1 : 1)),
+  const allProviders = $derived(
+    Object.values(providers).sort((a, b) => (a.providerId < b.providerId ? -1 : 1)),
   )
-  const gateway = $derived(all.find(p => p.apiType === GATEWAY_API_TYPE) ?? null)
 
   const defaultRefs = $derived.by(() => {
     const refs: string[] = []
-    for (const p of textProviders) {
+    for (const p of allProviders) {
       for (const m of p.models) {
         if ((m.contextLimit ?? 0) > 0) refs.push(`${p.providerId}/${m.id}`)
       }
@@ -88,9 +86,9 @@
     store.pushPage({ kind: 'provider_form', key: 'provider_form' })
   }
 
-  function editGateway() {
+  function editGateway(p?: ProviderInfo) {
     store.beginProviderDraft(
-      gateway ?? {
+      p ?? {
         providerId: GATEWAY_PROVIDER_ID,
         apiType: GATEWAY_API_TYPE,
         baseUrl: '',
@@ -138,12 +136,20 @@
         <ChevronRight class="size-4 text-muted-foreground" />
       </button>
 
-      {#if textProviders.length === 0}
+      {#if allProviders.length === 0}
         <p class="px-4 py-2 text-meta text-muted-foreground">{t('noProviders')}</p>
       {/if}
-      {#each textProviders as p (p.providerId)}
-        <button type="button" class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted" onclick={() => edit(p)}>
-          <LayoutGrid class="size-5 shrink-0 text-primary" />
+      {#each allProviders as p (p.providerId)}
+        <button
+          type="button"
+          class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted"
+          onclick={() => (isGatewayProvider(p.apiType) ? editGateway(p) : edit(p))}
+        >
+          {#if isGatewayProvider(p.apiType)}
+            <span class="w-5 shrink-0 text-center text-success">◎</span>
+          {:else}
+            <LayoutGrid class="size-5 shrink-0 text-primary" />
+          {/if}
           <span class="min-w-0 flex-1">
             <span class="block text-body font-medium">{p.providerId}</span>
             <span class="block truncate text-micro text-muted-foreground">{apiTypeLabel(p.apiType)} · {t('modelsCount', { n: p.models.length })}</span>
@@ -151,22 +157,6 @@
           <ChevronRight class="size-4 text-muted-foreground" />
         </button>
       {/each}
-
-      <div class="mx-4 my-4 border-t border-border"></div>
-      <div class="px-4 pb-1 text-micro font-semibold tracking-wider text-muted-foreground uppercase">{t('gatewaySection')}</div>
-      <button type="button" class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted" onclick={editGateway}>
-        <span class="w-5 text-center" class:text-success={gateway} class:text-muted-foreground={!gateway}>◎</span>
-        <span class="min-w-0 flex-1">
-          <span class="block text-body font-medium">gateway</span>
-          <span class="block truncate text-micro text-muted-foreground">
-            {gateway ? `${t('modelsCount', { n: gateway.models.length })} · ${gateway.baseUrl}` : t('gatewayHint')}
-          </span>
-        </span>
-        <ChevronRight class="size-4 text-muted-foreground" />
-      </button>
-      {#if gateway}
-        <p class="px-4 pb-2 text-micro text-muted-foreground">{t('gatewayHint')}</p>
-      {/if}
     {/if}
   </div>
 </div>

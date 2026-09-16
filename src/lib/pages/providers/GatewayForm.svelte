@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Plus } from '@lucide/svelte'
-  // GatewayForm — web port of flutter GatewayFormScreen: the single
-  // Vercel-compatible gateway (baseUrl + key, Discover button, text vs
-  // multimodal model rows).
+  // GatewayForm — web port of flutter GatewayFormScreen: a Vercel-compatible
+  // gateway provider (id + baseUrl + key, Discover button, text vs multimodal
+  // model rows). Several gateways may coexist; the id is editable when new.
   import type { PageProps } from '$lib/page-props'
   import { t } from '$lib/i18n.svelte'
   import { showToast, showErrorToast } from '$lib/toast.svelte'
@@ -12,6 +12,7 @@
   let { store, showBack = false }: PageProps = $props()
 
   const draft = $derived(store.providerDraft)
+  let id = $state(GATEWAY_PROVIDER_ID)
   let url = $state('')
   let key = $state('')
   let registering = $state(false)
@@ -20,6 +21,7 @@
   $effect(() => {
     const d = store.providerDraft
     if (d) {
+      id = d.id || GATEWAY_PROVIDER_ID
       url = d.baseUrl
       key = d.apiKey
     }
@@ -35,7 +37,7 @@
     discovering = true
     try {
       const r = await store.api.discoverGatewayModels({
-        providerId: GATEWAY_PROVIDER_ID,
+        providerId: (id.trim() || GATEWAY_PROVIDER_ID),
         apiType: GATEWAY_API_TYPE,
         baseUrl: url.trim(),
         apiKey: key,
@@ -61,7 +63,7 @@
   async function save() {
     const d = store.providerDraft
     if (!d) return
-    d.id = GATEWAY_PROVIDER_ID
+    d.id = (id.trim() || GATEWAY_PROVIDER_ID)
     d.apiType = GATEWAY_API_TYPE
     d.baseUrl = url.trim()
     d.apiKey = key
@@ -69,7 +71,7 @@
     registering = true
     try {
       await store.api.registerProvider({
-        providerId: GATEWAY_PROVIDER_ID,
+        providerId: d.id,
         apiType: GATEWAY_API_TYPE,
         baseUrl: d.baseUrl,
         apiKey: d.apiKey,
@@ -108,6 +110,11 @@
 
     <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
       <p class="text-micro text-muted-foreground">{t('gatewayHint')}</p>
+
+      <label class="block">
+        <span class="mb-1 block text-meta text-muted-foreground">{t('providerIdReq')}</span>
+        <input bind:value={id} class="h-9 w-full rounded-md border border-input bg-transparent px-3 font-mono text-sm outline-none focus-visible:border-ring" />
+      </label>
 
       <label class="block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('baseUrlReq')}</span>

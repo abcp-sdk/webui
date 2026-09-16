@@ -7,7 +7,7 @@
   import { t } from '$lib/i18n.svelte'
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import { loadModelsDev, npmToType, type MdProvider } from '$lib/modelsdev'
-  import { TEXT_API_TYPES, apiTypeLabelKey } from './common'
+  import { apiTypeLabelKey } from './common'
   import ModelRow from './ModelRow.svelte'
 
   let { store, showBack = false }: PageProps = $props()
@@ -21,6 +21,11 @@
   let templateOpen = $state(false)
   let templates = $state<MdProvider[]>([])
   let templateQuery = $state('')
+
+  $effect(() => {
+    // Refresh the capability matrix on open (falls back to the bundled copy).
+    void store.refreshProviderCatalog()
+  })
 
   $effect(() => {
     const d = store.providerDraft
@@ -149,7 +154,7 @@
       <label class="block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('apiType')}</span>
         <select bind:value={apiType} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring">
-          {#each TEXT_API_TYPES as ty (ty)}
+          {#each Object.keys(store.providerCatalog) as ty (ty)}
             <option value={ty}>{t(apiTypeLabelKey(ty))}</option>
           {/each}
         </select>

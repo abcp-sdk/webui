@@ -1,3 +1,18 @@
+/** Bundled fallback copy of the server capability matrix (canonical api
+ * types only). Used until ListProvidersCatalog answers; the server response
+ * overrides it. */
+export const FALLBACK_API_TYPE_CAPABILITIES: Record<string, string[]> = {
+  'openai-compatible': ['text', 'embedding', 'image', 'speech', 'transcription'],
+  'openai': ['text', 'embedding', 'image', 'speech', 'transcription'],
+  'anthropic': ['text'],
+  'deepseek': ['text'],
+  'google': ['text'],
+  'vercel-compatible-gateway': [
+    'text', 'image', 'video', 'speech', 'transcription', 'embedding', 'rerank',
+  ],
+  'cohere': ['text', 'rerank'],
+}
+
 // Domain models — direct port of flutter/lib/models.dart (the subset the UI
 // uses; legacy container/ops models are intentionally omitted).
 

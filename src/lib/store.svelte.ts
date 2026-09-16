@@ -5,7 +5,7 @@
 import type { AgentApi } from './api'
 import type { LocalStore } from './db'
 import type { ChatDraft, ProviderDraft, Session } from './models'
-import { draftFromProvider, type ProviderInfo } from './models'
+import { draftFromProvider, FALLBACK_API_TYPE_CAPABILITIES, type ProviderInfo } from './models'
 import { Prefs } from './prefs'
 
 export type SiderTab = 'chat' | 'config'
@@ -52,6 +52,19 @@ export class AppStore {
   /** Provider draft shared by the provider/model form pages. */
   providerDraft: ProviderDraft | null = $state(null)
   providersRevision = $state(0)
+
+  /** Capability matrix from ListProvidersCatalog (api type -> capabilities).
+   * Seeded with the bundled fallback; refreshed from the server on demand. */
+  providerCatalog = $state<Record<string, string[]>>({ ...FALLBACK_API_TYPE_CAPABILITIES })
+
+  async refreshProviderCatalog(): Promise<void> {
+    try {
+      const c = await this.api.providerCatalog()
+      if (Object.keys(c).length > 0) this.providerCatalog = c
+    } catch {
+      /* keep the fallback */
+    }
+  }
 
   // $state: push/pop must be reactive (the Shell derives its panes from it).
   // Both tabs are pre-seeded so no lazy mutation happens during render
