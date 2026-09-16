@@ -12,8 +12,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg'],
       manifest: {
-        name: 'EasyLab Agent',
-        short_name: 'EasyLab',
+        name: 'ABCP Agent (AW)',
+        short_name: 'AW',
         description: 'Agent chat over the abc agent backend (agent.v1 via Connect)',
         theme_color: '#0a0a0a',
         background_color: '#0a0a0a',
