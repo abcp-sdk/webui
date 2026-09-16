@@ -213,7 +213,7 @@
 {:else if phase === 'setup'}
   <div class="flex h-full items-center justify-center overflow-y-auto p-6">
     <div class="w-full max-w-[480px]">
-      <h1 class="mb-6 text-xl font-semibold">EasyLab</h1>
+      <h1 class="mb-6 text-xl font-semibold">{t('appTitle')}</h1>
       <label class="mb-4 block">
         <span class="mb-1.5 block text-meta text-muted-foreground">{t('gatewayUrl')}</span>
         <Input bind:value={setupBase} disabled={busy} placeholder="https://standalone-agent.temp.10.199.64.20.nip.io" />
