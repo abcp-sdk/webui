@@ -111,7 +111,7 @@
       <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}>←</button>
     {/if}
     <span class="text-sm font-semibold">{t('llmProviders')}</span>
-    <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('addProvider')} onclick={addText}><Plus class="size-4" /></button>
+    <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('addProvider')} onclick={addText}><Plus class="size-[18px]" /></button>
   </header>
 
   <div class="min-h-0 flex-1 overflow-y-auto">

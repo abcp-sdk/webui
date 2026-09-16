@@ -2,6 +2,6 @@
   <rect width="128" height="128" rx="28" fill="#7c3aed"/>
   <text x="64" y="64" fill="#fafafa"
         font-family="DejaVu Sans, Helvetica, Arial, sans-serif"
-        font-weight="700" font-size="59" letter-spacing="-1"
-        text-anchor="middle" dominant-baseline="central">AW</text>
+        font-weight="700" font-size="47" text-anchor="middle"
+        dominant-baseline="central">AW</text>
 </svg>

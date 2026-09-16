@@ -116,7 +116,7 @@
     {/if}
     <span class="text-sm font-semibold">{titleOf(initialId)}</span>
     {#if isDetail && initialId === 'presets'}
-      <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('newPreset')} onclick={() => store.pushPage({ kind: 'preset_form', key: 'preset_form_new' })}><Plus class="size-4" /></button>
+      <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('newPreset')} onclick={() => store.pushPage({ kind: 'preset_form', key: 'preset_form_new' })}><Plus class="size-[18px]" /></button>
     {/if}
   </header>
 

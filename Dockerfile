@@ -20,7 +20,7 @@ RUN printf 'server {\n\
     # sqlite-wasm + the OPFS proxy worker must not be rewritten to index.html.\n\
     location ^~ /assets/ { try_files $uri =404; }\n\
     location ~ \\.wasm$ { default_type application/wasm; try_files $uri =404; }\n\
-    location ~ \\.(png|svg|ico|webmanifest)$ { try_files $uri =404; }\n\
+    location ~ \\.(png|svg|ico|webmanifest|ttf|woff2?)$ { try_files $uri =404; }\n\
     location / { try_files $uri $uri/ /index.html; }\n\
     location = /healthz { return 200 "{\\"ok\\":true,\\"name\\":\\"agent-webui\\"}"; add_header Content-Type application/json; }\n\
 }\n' > /etc/nginx/http.d/default.conf

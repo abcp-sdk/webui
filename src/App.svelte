@@ -69,23 +69,32 @@
     void boot()
   })
 
-  // Default backend: the k3s standalone agent (the SAME one the Flutter app
-  // uses). Overridable via prefs / ?base=…&token=… / VITE_AGENT_URL.
+  // Where the connection form POINTS by default (the k3s standalone agent —
+  // the same backend the other clients use). This is only a PREFILL for the
+  // setup form: no token is ever baked in, so an install always starts at the
+  // setup / backends flow and the user picks (or adds) their own account.
+  // Overridable via ?base=…&token=… or VITE_AGENT_URL.
   const DEFAULT_BASE = (import.meta.env.VITE_AGENT_URL as string | undefined) ??
     'https://standalone-agent.temp.10.199.64.20.nip.io'
-  const DEFAULT_TOKEN = (import.meta.env.VITE_AGENT_TOKEN as string | undefined) ?? 'devtenanttoken'
 
   async function boot() {
+    // A saved connection (or an explicit ?base=&token= link) goes straight in;
+    // otherwise the user lands on the connection form — an install must never
+    // silently sign in with a baked-in account.
     const prefs = Prefs.load()
     let base = prefs.baseUrl ?? ''
     let tok = prefs.token ?? ''
     const qp = new URLSearchParams(location.search)
-    const qBase = qp.get('base')
-    const qToken = qp.get('token')
-    if (qBase) base = qBase
-    if (qToken) tok = qToken
-    if (!base) base = DEFAULT_BASE.replace(/\/+$/, '')
-    if (!tok) tok = DEFAULT_TOKEN
+    if (qp.get('base')) base = qp.get('base')!
+    if (qp.get('token')) tok = qp.get('token')!
+    if (!base || !tok) {
+      setupBase = (base || DEFAULT_BASE).replace(/\/+$/, '')
+      setupToken = ''
+      baseUrl = base
+      token = tok
+      phase = 'setup'
+      return
+    }
     if (base !== prefs.baseUrl || tok !== prefs.token) Prefs.save(base, tok)
     baseUrl = base
     token = tok
@@ -223,6 +232,13 @@
       <Button class="w-full" disabled={!canConnect} onclick={() => void connect()}>
         {busy ? t('connecting') : t('connect')}
       </Button>
+      {#if Prefs.backends().length > 0}
+        <button
+          type="button"
+          class="mt-3 w-full rounded-md px-3 py-2 text-meta text-muted-foreground hover:bg-muted"
+          onclick={openBackends}
+        >{t('backendsTitle')}</button>
+      {/if}
     </div>
   </div>
 {:else}

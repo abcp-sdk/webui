@@ -6,6 +6,7 @@
   // drag&drop, clipboard media paste, voice recording and settings dialog.
   import type { PageProps } from '$lib/page-props'
   import { MessagesController } from '$lib/messages.svelte'
+  import { untrack } from 'svelte'
   import { t } from '$lib/i18n.svelte'
   import { confirmDialog, promptDialog } from '$lib/dialogs'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
@@ -24,11 +25,13 @@
 
   let { store }: PageProps = $props()
 
-  // The controller instance itself is deliberately NON-reactive: the session
-  // effect both reads it (dispose) and writes it, and a $state field would
-  // create a self-triggering loop. ctrlReady signals existence to the view.
-  let ctrl: MessagesController | null = null
-  let ctrlReady = $state(false)
+  // The controller instance is REACTIVE: switching sessions replaces it, and
+  // the message list must re-render against the NEW one. With a plain (non
+  // $state) field the template kept reading the old controller — the header
+  // updated (it derives from the store) while the message list did not, which
+  // is exactly the "switch chat, content does not refresh" bug. Disposal reads
+  // it through `untrack` so the effect does not depend on it.
+  let ctrl = $state<MessagesController | null>(null)
   let providers = $state<Record<string, ProviderInfo>>({})
   let presets: Preset[] = $state([])
   let localUrls = $state<Record<string, string>>({})
@@ -62,17 +65,17 @@
   $effect(() => {
     const id = sid
     if (!id) {
-      ctrl?.dispose()
-      ctrl = null
-      ctrlReady = false
+      untrack(() => {
+        ctrl?.dispose()
+        ctrl = null
+      })
       return
     }
-    const prev = ctrl
+    const prev = untrack(() => ctrl)
     const c = new MessagesController(store.api, () => id, store.local, {
       sendFailed: e => t('sendFailed', { e: String(e) }),
     })
     ctrl = c
-    ctrlReady = true
     prev?.dispose()
     c.init()
     // restore draft
@@ -110,7 +113,7 @@
   }
 
   $effect(() => {
-    if (!ctrlReady || !ctrl || !listEl) return
+    if (!ctrl || !listEl) return
     void ctrl.revision
     if (followBottom) {
       requestAnimationFrame(() => {
@@ -411,7 +414,7 @@
 
 {#if !sid}
   <div class="flex h-full items-center justify-center text-meta text-muted-foreground">{t('noSessions')}</div>
-{:else if ctrlReady && ctrl}
+{:else if ctrl}
   <div
     class="relative flex h-full w-full min-h-0 flex-col" role="application"
     ondragover={e => {
@@ -429,7 +432,7 @@
     <!-- top bar -->
     <header class="relative flex h-12 shrink-0 items-center border-b border-border/50 px-1">
       <div class="flex min-w-0 items-center gap-2">
-        <button type="button" class="rounded p-1.5 hover:bg-muted" aria-label="back" onclick={() => store.popPage()}><ChevronLeft class="size-4" /></button>
+        <button type="button" class="rounded p-1.5 hover:bg-muted" aria-label="back" onclick={() => store.popPage()}><ChevronLeft class="size-[18px]" /></button>
         <span class={cn('size-2 rounded-full', ctrl.sending ? 'bg-warning' : 'bg-success')}></span>
         {#if ctxLabel}
           <span class="text-micro text-muted-foreground tabular-nums">{ctxLabel}</span>
@@ -517,15 +520,15 @@
               title={t('attach')}
               aria-label={t('attach')}
             >
-              <Paperclip class="size-4" />
+              <Paperclip class="size-[18px]" />
             </button>
           {/snippet}
           <div class="w-44 py-0.5">
             <button type="button" class="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-meta hover:bg-muted" onclick={() => pickFiles('image/*')}>
-              <Image class="size-4" /> {t('chooseImage')}
+              <Image class="size-[18px]" /> {t('chooseImage')}
             </button>
             <button type="button" class="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-meta hover:bg-muted" onclick={() => pickFiles('')}>
-              <FileText class="size-4" /> {t('chooseFile')}
+              <FileText class="size-[18px]" /> {t('chooseFile')}
             </button>
           </div>
         </Popover>
@@ -547,13 +550,13 @@
         ></textarea>
 
         {#if recording}
-          <button type="button" class="animate-pulse rounded-full bg-destructive p-2 text-white" title={t('stop')} aria-label={t('stop')} onclick={() => void toggleRecording()}><Square class="size-4" /></button>
+          <button type="button" class="animate-pulse rounded-full bg-destructive p-2 text-white" title={t('stop')} aria-label={t('stop')} onclick={() => void toggleRecording()}><Square class="size-[18px]" /></button>
         {:else}
-          <button type="button" class="rounded-full p-2 text-muted-foreground hover:bg-muted" title={t('recordVoice')} aria-label={t('recordVoice')} onclick={() => void toggleRecording()}><Mic class="size-4" /></button>
+          <button type="button" class="rounded-full p-2 text-muted-foreground hover:bg-muted" title={t('recordVoice')} aria-label={t('recordVoice')} onclick={() => void toggleRecording()}><Mic class="size-[18px]" /></button>
         {/if}
 
         {#if ctrl.sending}
-          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground" title={t('stop')} aria-label={t('stop')} onclick={() => ctrl!.stop()}><Square class="size-4" /></button>
+          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground" title={t('stop')} aria-label={t('stop')} onclick={() => ctrl!.stop()}><Square class="size-[18px]" /></button>
         {:else}
           <button
             type="button"
@@ -562,7 +565,7 @@
             title={t('send')}
             aria-label={t('send')}
             onclick={() => void send()}
-          ><Send class="size-4" /></button>
+          ><Send class="size-[18px]" /></button>
         {/if}
       </div>
     </div>

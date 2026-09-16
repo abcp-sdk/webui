@@ -6,6 +6,23 @@
  * dark/light + AppTypography scale). The dark set is the default, matching the
  * Flutter app's dark-by-default start.
  */
+
+/*
+ * Self-hosted fonts, identical to the Flutter bundle (assets/fonts): the
+ * CJK UI face plus the colour-emoji fallback. Local files only — no CDN /
+ * gstatic fetch, and the same glyph metrics as the other three clients.
+ */
+@font-face {
+  font-family: 'NotoSansSC';
+  src: url('/NotoSansSC.ttf') format('truetype');
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NotoColorEmoji';
+  src: url('/NotoColorEmoji.ttf') format('truetype');
+  font-display: swap;
+}
 :root,
 html[data-theme='dark'] {
   --background: #0a0a0a;
@@ -112,7 +129,14 @@ html[data-theme='light'] {
   line-height: 1.5;
 }
 
-html,
+html {
+  height: 100%;
+  /* NOTE: no font-size here. Tailwind's type scale is rem-based, so setting a
+     root size (we used to force 14px) silently shrank text-sm to 12.25px and
+     text-xl to 17.5px — the whole UI read ~12% smaller than the Flutter and
+     Compose clients, which use absolute px/sp. Keep the browser default (1rem
+     = 16px) and size the body explicitly instead. */
+}
 body {
   height: 100%;
   background: var(--background);
