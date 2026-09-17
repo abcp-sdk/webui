@@ -1,20 +1,20 @@
 <script lang="ts">
   // CapabilityIcon — vector icon for a model capability (port of flutter
   // providers.dart capabilityIcon; replaces the earlier emoji glyphs).
-  import { MessageSquare, Image, Video, AudioLines, Mic, Layers, Zap, Asterisk } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
 
   let { capability, size = 14 }: { capability: string; size?: number } = $props()
 
   const icon = $derived.by(() => {
     switch (capability) {
-      case 'image': return Image
-      case 'video': return Video
-      case 'speech': return AudioLines
-      case 'transcription': return Mic
-      case 'embedding': return Asterisk
-      case 'reranking': return Layers
-      case 'realtime': return Zap
-      default: return MessageSquare
+      case 'image': return AppIcons.image
+      case 'video': return AppIcons.video
+      case 'speech': return AppIcons.audio
+      case 'transcription': return AppIcons.mic
+      case 'embedding': return AppIcons.asterisk
+      case 'reranking': return AppIcons.layers
+      case 'realtime': return AppIcons.bolt
+      default: return AppIcons.chat
     }
   })
   const tone = $derived.by(() => {

@@ -2,7 +2,7 @@
   // shadcn-svelte-style DropdownMenu (bits-ui) + a thin `DropdownMenuItem`
   // wrapper that carries the shared item styling.
   import { DropdownMenu as DropdownMenuPrimitive } from 'bits-ui'
-  import { MoreHorizontal } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   import type { Snippet } from 'svelte'
   import { cn } from '$lib/utils'
 
@@ -28,7 +28,7 @@
     {#if trigger}
       {@render trigger()}
     {:else}
-      <MoreHorizontal class="size-4" />
+      <AppIcons.more class="size-4" />
     {/if}
   </DropdownMenuPrimitive.Trigger>
   <DropdownMenuPrimitive.Portal>

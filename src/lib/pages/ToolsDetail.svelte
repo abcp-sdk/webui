@@ -8,7 +8,7 @@
   import { Prefs } from '$lib/prefs'
   import { getLocale } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
-  import { ChevronDown, ChevronRight } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   import { parseToolParams } from '$lib/models'
 
   let { store }: { store: AppStore } = $props()
@@ -119,7 +119,7 @@
                 {req ? t('requiredConfig') : hasConfig ? t('configured') : t('needsConfig')}
               </span>
             {/if}
-            <span class="text-micro text-muted-foreground">{#if expanded === tl.name}<ChevronDown class="size-3" />{:else}<ChevronRight class="size-3" />{/if}</span>
+            <span class="text-micro text-muted-foreground">{#if expanded === tl.name}<AppIcons.chevron_down class="size-3" />{:else}<AppIcons.chevron_right class="size-3" />{/if}</span>
           </button>
 
           {#if expanded === tl.name}

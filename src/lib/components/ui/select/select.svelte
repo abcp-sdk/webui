@@ -1,7 +1,7 @@
 <script lang="ts">
   // shadcn-svelte-style Select (bits-ui) with a native-like trigger.
   import { Select as SelectPrimitive } from 'bits-ui'
-  import { Check, ChevronDown } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   import { cn } from '$lib/utils'
 
   let {
@@ -36,7 +36,7 @@
     )}
   >
     <SelectPrimitive.Value {placeholder} />
-    <ChevronDown class="size-3.5 shrink-0 text-muted-foreground" />
+    <AppIcons.chevron_down class="size-3.5 shrink-0 text-muted-foreground" />
   </SelectPrimitive.Trigger>
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
@@ -50,7 +50,7 @@
             label={item.label}
             class="flex w-full cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none select-none data-[highlighted]:bg-muted data-[disabled]:opacity-50"
           >
-            <Check class="size-3.5 opacity-0 group-data-[state=checked]:opacity-100" />
+            <AppIcons.check class="size-3.5 opacity-0 group-data-[state=checked]:opacity-100" />
             <span>{item.label}</span>
           </SelectPrimitive.Item>
         {/each}

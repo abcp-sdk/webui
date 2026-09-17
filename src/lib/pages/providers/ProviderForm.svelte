@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, Sparkles } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   // ProviderForm — web port of flutter ProviderFormScreen: edit/create a TEXT
   // provider (template picker from models.dev, id/apiType/baseUrl/key, model
   // rows with the model drill-in form).
@@ -142,7 +142,7 @@
         class="flex h-10 w-full items-center gap-2 rounded-md border border-input px-3 text-left hover:bg-muted"
         onclick={() => void openTemplates()}
       >
-        <Sparkles class="size-4 text-primary" />
+        <AppIcons.sparkles class="size-4 text-primary" />
         <span class="truncate text-meta text-muted-foreground">{t('providerTemplateHint')}</span>
       </button>
 
@@ -177,7 +177,7 @@
           class="rounded p-1.5 text-primary hover:bg-muted"
           title={t('addModel')}
           onclick={() => store.pushPage({ kind: 'provider_models', key: 'provider_model_new', modelId: null })}
-        ><Plus class="size-4" /></button>
+        ><AppIcons.add class="size-4" /></button>
       </div>
       {#if draft.models.length === 0}
         <p class="py-1 text-micro text-muted-foreground">{t('providerTemplateHint')}</p>

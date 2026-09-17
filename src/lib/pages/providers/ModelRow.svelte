@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   // ModelRow — web port of flutter _ModelRow: one model in a provider draft
   // (kind icon, mono id, context/kind tag, remove).
   import type { ProviderModel } from '$lib/models'
@@ -29,5 +29,5 @@
       {isText ? `${t('capText')} · ${model.contextLimit}` : t(capabilityLabelKey(type))}
     </span>
   </button>
-  <button type="button" class="rounded p-1 text-muted-foreground hover:bg-muted" title={t('delete')} onclick={onRemove}><X class="size-4" /></button>
+  <button type="button" class="rounded p-1 text-muted-foreground hover:bg-muted" title={t('delete')} onclick={onRemove}><AppIcons.close class="size-4" /></button>
 </div>

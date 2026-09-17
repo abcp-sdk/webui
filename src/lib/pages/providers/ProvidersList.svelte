@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, ChevronRight, LayoutGrid, CircleDot, Circle } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   // ProvidersList — web port of flutter ProvidersListScreen: the two sections
   // (every provider including gateways), default-model
   // pick (sets `default_model` config), add/edit entry points.
@@ -111,7 +111,7 @@
       <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}>←</button>
     {/if}
     <span class="text-sm font-semibold">{t('llmProviders')}</span>
-    <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('addProvider')} onclick={addText}><Plus class="size-[18px]" /></button>
+    <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('addProvider')} onclick={addText}><AppIcons.add class="size-[18px]" /></button>
   </header>
 
   <div class="min-h-0 flex-1 overflow-y-auto">
@@ -133,7 +133,7 @@
           <span class="block text-body font-medium">{t('defaultModel')}</span>
           <span class="block truncate text-micro text-muted-foreground">{defaultModel || t('none')}</span>
         </span>
-        <ChevronRight class="size-4 text-muted-foreground" />
+        <AppIcons.chevron_right class="size-4 text-muted-foreground" />
       </button>
 
       {#if allProviders.length === 0}
@@ -148,13 +148,13 @@
           {#if isGatewayProvider(p.apiType)}
             <span class="w-5 shrink-0 text-center text-success">◎</span>
           {:else}
-            <LayoutGrid class="size-5 shrink-0 text-primary" />
+            <AppIcons.apps class="size-5 shrink-0 text-primary" />
           {/if}
           <span class="min-w-0 flex-1">
             <span class="block text-body font-medium">{p.providerId}</span>
             <span class="block truncate text-micro text-muted-foreground">{apiTypeLabel(p.apiType)} · {t('modelsCount', { n: p.models.length })}</span>
           </span>
-          <ChevronRight class="size-4 text-muted-foreground" />
+          <AppIcons.chevron_right class="size-4 text-muted-foreground" />
         </button>
       {/each}
     {/if}
@@ -171,7 +171,7 @@
           class="flex w-full items-center gap-3 px-3 py-2.5 text-left text-meta hover:bg-muted"
           onclick={() => void pickDefault(ref)}
         >
-          {#if ref === defaultModel}<CircleDot class="size-4 text-primary" />{:else}<Circle class="size-4 text-muted-foreground" />{/if}
+          {#if ref === defaultModel}<AppIcons.target class="size-4 text-primary" />{:else}<AppIcons.circle class="size-4 text-muted-foreground" />{/if}
           <span class="font-mono">{ref || t('none')}</span>
         </button>
       {/each}

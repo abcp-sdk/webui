@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus, ChevronRight, Palette, ArrowLeftRight, LayoutGrid, Sparkles, Wrench, Globe, Languages, CircleDot } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   // Config — web port of flutter screens/config.dart: the settings root list
   // (appearance / backend switch / providers / presets / tools / language) and
   // the drill-in details (appearance, backends, presets, tools).
@@ -79,26 +79,26 @@
 
   const sections = $derived.by(() => {
     const appearance: Row[] = [
-      { icon: Palette, label: t('appearance'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_appearance', id: 'appearance' }) },
+      { icon: AppIcons.palette, label: t('appearance'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_appearance', id: 'appearance' }) },
     ]
     const backend: Row[] = [
       {
-        icon: ArrowLeftRight,
+        icon: AppIcons.swap,
         label: t('switchBackend'),
         onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_backends', id: 'backends' }),
         destructive: true,
       },
     ]
     const llm: Row[] = [
-      { icon: LayoutGrid, label: t('llmProviders'), onTap: () => store.pushSibling({ kind: 'providers_list', key: 'providers_list' }) },
-      { icon: Sparkles, label: t('presets'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_presets', id: 'presets' }) },
+      { icon: AppIcons.apps, label: t('llmProviders'), onTap: () => store.pushSibling({ kind: 'providers_list', key: 'providers_list' }) },
+      { icon: AppIcons.sparkles, label: t('presets'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_presets', id: 'presets' }) },
     ]
     const workspace: Row[] = [
-      { icon: Wrench, label: t('tools'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_tools', id: 'tools' }) },
+      { icon: AppIcons.tools, label: t('tools'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_tools', id: 'tools' }) },
     ]
     const language: Row[] = [
-      { icon: Globe, label: t('language'), onTap: () => (pickLocaleOpen = true) },
-      { icon: Languages, label: t('agentLocale'), onTap: () => (pickAgentLocaleOpen = true) },
+      { icon: AppIcons.globe, label: t('language'), onTap: () => (pickLocaleOpen = true) },
+      { icon: AppIcons.language, label: t('agentLocale'), onTap: () => (pickAgentLocaleOpen = true) },
     ]
     return [
       { title: t('appearance'), rows: appearance },
@@ -117,7 +117,7 @@
     {/if}
     <span class="text-sm font-semibold">{titleOf(initialId)}</span>
     {#if isDetail && initialId === 'presets'}
-      <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('newPreset')} onclick={() => store.pushPage({ kind: 'preset_form', key: 'preset_form_new' })}><Plus class="size-[18px]" /></button>
+      <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('newPreset')} onclick={() => store.pushPage({ kind: 'preset_form', key: 'preset_form_new' })}><AppIcons.add class="size-[18px]" /></button>
     {/if}
   </header>
 
@@ -135,7 +135,7 @@
           >
             <r.icon class="size-5 shrink-0 {r.destructive ? 'text-destructive' : 'text-muted-foreground'}" />
             <span class="flex-1 text-body">{r.label}</span>
-            <ChevronRight class="size-4 text-muted-foreground" />
+            <AppIcons.chevron_right class="size-4 text-muted-foreground" />
           </button>
         {/each}
       {/each}
@@ -188,7 +188,7 @@
               pickLocaleOpen = false
             }}
           >
-            {#if getLocale() === code}<CircleDot class="size-4 text-primary" />{:else}<span class="size-4 rounded-full border border-muted-foreground/50"></span>{/if} {label}
+            {#if getLocale() === code}<AppIcons.target class="size-4 text-primary" />{:else}<span class="size-4 rounded-full border border-muted-foreground/50"></span>{/if} {label}
           </button>
         {/each}
       </div>
@@ -206,7 +206,7 @@
             class="flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left text-body hover:bg-muted"
             onclick={() => void pickAgentLocale(code)}
           >
-            {#if Prefs.loadAgentLocale() === code}<CircleDot class="size-4 text-primary" />{:else}<span class="size-4 rounded-full border border-muted-foreground/50"></span>{/if} {label}
+            {#if Prefs.loadAgentLocale() === code}<AppIcons.target class="size-4 text-primary" />{:else}<span class="size-4 rounded-full border border-muted-foreground/50"></span>{/if} {label}
           </button>
         {/each}
       </div>

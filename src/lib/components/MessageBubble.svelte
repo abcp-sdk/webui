@@ -9,7 +9,7 @@
   import { renderMarkdown } from '$lib/markdown'
   import { showToast } from '$lib/toast.svelte'
   import { cn } from '$lib/utils'
-  import { Copy, RefreshCw, Pencil, Undo2, ChevronDown, ChevronRight } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   import ToolPartView from './ToolPartView.svelte'
   import MediaAttachment from './MediaAttachment.svelte'
   import FileRefText from './FileRefText.svelte'
@@ -113,7 +113,7 @@
                 class="flex w-full items-center gap-1.5 text-left text-micro font-semibold text-warning"
                 onclick={() => (reasoningOpen = !reasoningOpen)}
               >
-                {#if reasoningOpen}<ChevronDown class="size-3.5" />{:else}<ChevronRight class="size-3.5" />{/if}
+                {#if reasoningOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
                 <span>{t('thinkLabel')}{isStreaming ? '…' : ''}</span>
               </button>
               {#if reasoningOpen || isStreaming}
@@ -131,7 +131,7 @@
                 class="flex w-full items-center gap-1.5 text-left text-micro text-muted-foreground"
                 onclick={() => (compactionOpen = !compactionOpen)}
               >
-                {#if compactionOpen}<ChevronDown class="size-3.5" />{:else}<ChevronRight class="size-3.5" />{/if}
+                {#if compactionOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
                 <span>{t('compactedLabel')}</span>
               </button>
               {#if compactionOpen}
@@ -146,15 +146,15 @@
     {#if !isStreaming && !isSystem}
       <div class={cn('mt-1 flex items-center gap-0.5 text-micro text-muted-foreground', isUser ? 'justify-end' : 'justify-start')}>
         {#if hasText}
-          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('copy')} aria-label={t('copy')} onclick={copy}><Copy class="size-3.5" /></button>
+          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('copy')} aria-label={t('copy')} onclick={copy}><AppIcons.copy class="size-3.5" /></button>
         {/if}
         {#if isUser && onResend}
-          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('retry')} aria-label={t('retry')} onclick={() => onResend?.(textOfMessage())}><RefreshCw class="size-3.5" /></button>
+          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('retry')} aria-label={t('retry')} onclick={() => onResend?.(textOfMessage())}><AppIcons.refresh class="size-3.5" /></button>
         {/if}
         {#if isUser && onEdit}
-          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('edit')} aria-label={t('edit')} onclick={beginEdit}><Pencil class="size-3.5" /></button>
+          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('edit')} aria-label={t('edit')} onclick={beginEdit}><AppIcons.edit class="size-3.5" /></button>
         {/if}
-        <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('undo')} aria-label={t('undo')} onclick={() => (undoOpen = true)}><Undo2 class="size-3.5" /></button>
+        <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('undo')} aria-label={t('undo')} onclick={() => (undoOpen = true)}><AppIcons.undo class="size-3.5" /></button>
         {#if msg.createdAt}
           <span class="ml-1 tabular-nums opacity-70">{fmtTime(msg.createdAt)}</span>
         {/if}

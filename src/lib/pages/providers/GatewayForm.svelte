@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Plus } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   // GatewayForm — web port of flutter GatewayFormScreen: a Vercel-compatible
   // gateway provider (id + baseUrl + key, Discover button, text vs multimodal
   // model rows). Several gateways may coexist; the id is editable when new.
@@ -139,7 +139,7 @@
           class="rounded p-1.5 text-primary hover:bg-muted"
           title={t('addModel')}
           onclick={() => store.pushPage({ kind: 'gateway_model', key: 'gateway_model_new', modelId: null })}
-        ><Plus class="size-4" /></button>
+        ><AppIcons.add class="size-4" /></button>
       </div>
 
       {#if textModels.length}

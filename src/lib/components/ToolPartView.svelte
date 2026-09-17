@@ -7,10 +7,7 @@
   import { t } from '$lib/i18n.svelte'
   import { mediaUrl, mimeToKind } from '$lib/media'
   import { cn } from '$lib/utils'
-  import {
-    CheckCircle, LoaderCircle, AlertCircle, ChevronDown, ChevronRight, Info, Braces, FileText, TriangleAlert,
-    Terminal, FilePen, FileSearch, FolderOpen, Trash2, Code, GitMerge, Package, Rocket, Download, Globe, ListChecks, History, Image as ImageIcon, Wrench, MoreHorizontal, GitCommitHorizontal, Diff,
-} from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
 
   let {
     part,
@@ -85,24 +82,24 @@
   /** Tool-kind glyph + tint (flutter `ToolIcon`). */
   function toolGlyph(name: string) {
     const n = name.toLowerCase()
-    if (n.includes('sandbox-run') || n.includes('shell') || n.includes('exec')) return { Icon: Terminal, cls: 'text-warning' }
+    if (n.includes('sandbox-run') || n.includes('shell') || n.includes('exec')) return { Icon: AppIcons.terminal, cls: 'text-warning' }
     if (n.includes('read') || n.includes('write') || n.includes('edit'))
-      return { Icon: n.includes('write') ? FilePen : FileText, cls: 'text-primary' }
-    if (n.includes('grep') || n.includes('search')) return { Icon: FileSearch, cls: 'text-primary' }
-    if (n.includes('glob') || n.includes('ls') || n.includes('explore')) return { Icon: FolderOpen, cls: 'text-primary' }
-    if (n.includes('delete')) return { Icon: Trash2, cls: 'text-destructive' }
-    if (n.includes('git') || n.includes('change') || n.includes('diff')) return { Icon: Code, cls: 'text-muted-foreground' }
-    if (n.includes('rebuild') || n.includes('rebase')) return { Icon: GitMerge, cls: 'text-muted-foreground' }
-    if (n.includes('build') || n.includes('image') || n.includes('docker')) return { Icon: Package, cls: 'text-accent' }
-    if (n.includes('deploy') || n.includes('release') || n.includes('helm')) return { Icon: Rocket, cls: 'text-success' }
-    if (n.includes('package') || n.includes('publish') || n.includes('registry')) return { Icon: Package, cls: 'text-success' }
-    if (n.includes('pull') || n.includes('download') || n.includes('fetch')) return { Icon: Download, cls: 'text-accent' }
+      return { Icon: n.includes('write') ? AppIcons.file_edit : AppIcons.file, cls: 'text-primary' }
+    if (n.includes('grep') || n.includes('search')) return { Icon: AppIcons.file_search, cls: 'text-primary' }
+    if (n.includes('glob') || n.includes('ls') || n.includes('explore')) return { Icon: AppIcons.folder, cls: 'text-primary' }
+    if (n.includes('delete')) return { Icon: AppIcons.delete, cls: 'text-destructive' }
+    if (n.includes('git') || n.includes('change') || n.includes('diff')) return { Icon: AppIcons.code, cls: 'text-muted-foreground' }
+    if (n.includes('rebuild') || n.includes('rebase')) return { Icon: AppIcons.merge, cls: 'text-muted-foreground' }
+    if (n.includes('build') || n.includes('image') || n.includes('docker')) return { Icon: AppIcons.pkg, cls: 'text-accent' }
+    if (n.includes('deploy') || n.includes('release') || n.includes('helm')) return { Icon: AppIcons.rocket, cls: 'text-success' }
+    if (n.includes('package') || n.includes('publish') || n.includes('registry')) return { Icon: AppIcons.inbox, cls: 'text-success' }
+    if (n.includes('pull') || n.includes('download') || n.includes('fetch')) return { Icon: AppIcons.download, cls: 'text-accent' }
     if (n.includes('web') || n.includes('browser') || n.includes('navigate') || n.includes('click') || n.includes('type') || n.includes('snapshot'))
-      return { Icon: Globe, cls: 'text-accent' }
-    if (n.includes('todo') || n.includes('job') || n.includes('task')) return { Icon: ListChecks, cls: 'text-accent' }
-    if (n.includes('history') || n.includes('memory') || n.includes('file_info')) return { Icon: History, cls: 'text-accent' }
-    if (n.includes('image_read') || n.includes('image')) return { Icon: ImageIcon, cls: 'text-accent' }
-    return { Icon: Wrench, cls: 'text-muted-foreground' }
+      return { Icon: AppIcons.globe, cls: 'text-accent' }
+    if (n.includes('todo') || n.includes('job') || n.includes('task')) return { Icon: AppIcons.list, cls: 'text-accent' }
+    if (n.includes('history') || n.includes('memory') || n.includes('file_info')) return { Icon: AppIcons.history, cls: 'text-accent' }
+    if (n.includes('image_read') || n.includes('image')) return { Icon: AppIcons.image, cls: 'text-accent' }
+    return { Icon: AppIcons.tools, cls: 'text-muted-foreground' }
   }
 
   /** flutter `toolDisplayName`: `todowrite` shows as `todo`. */
@@ -134,11 +131,11 @@
     onclick={() => (open = !open)}
   >
     {#if running}
-      <MoreHorizontal class="size-3.5 shrink-0 text-warning" />
+      <AppIcons.more class="size-3.5 shrink-0 text-warning" />
     {:else if hasError}
-      <AlertCircle class="size-3.5 shrink-0 text-destructive" />
+      <AppIcons.error class="size-3.5 shrink-0 text-destructive" />
     {:else}
-      <CheckCircle class="size-3.5 shrink-0 text-success" />
+      <AppIcons.success class="size-3.5 shrink-0 text-success" />
     {/if}
     <glyph.Icon class={cn('size-3.5 shrink-0', glyph.cls)} />
     <span class="min-w-0 truncate font-semibold text-muted-foreground">{toolDisplayName(tool || toolState?.title || 'tool')}</span>
@@ -147,7 +144,7 @@
     {:else}
       <span class="flex-1"></span>
     {/if}
-    {#if open}<ChevronDown class="size-3.5 shrink-0 text-muted-foreground" />{:else}<ChevronRight class="size-3.5 shrink-0 text-muted-foreground" />{/if}
+    {#if open}<AppIcons.chevron_down class="size-3.5 shrink-0 text-muted-foreground" />{:else}<AppIcons.chevron_right class="size-3.5 shrink-0 text-muted-foreground" />{/if}
   </button>
 
   {#if open}
@@ -160,8 +157,8 @@
             class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
             onclick={() => (inputOpen = !inputOpen)}
           >
-            {#if inputOpen}<ChevronDown class="size-3.5" />{:else}<ChevronRight class="size-3.5" />{/if}
-            <Braces class="size-[13px] text-primary" />
+            {#if inputOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
+            <AppIcons.braces class="size-[13px] text-primary" />
             <span>{t('toolInputParams')}</span>
           </button>
           {#if inputOpen}
@@ -174,8 +171,8 @@
       {#if hasError}
         <div class="rounded-sm border border-destructive/40 bg-background/50">
           <button type="button" class="flex w-full items-center gap-1 px-2 py-1 text-micro text-destructive">
-            <ChevronDown class="size-3.5" />
-            <TriangleAlert class="size-[13px]" />
+            <AppIcons.chevron_down class="size-3.5" />
+            <AppIcons.warn class="size-[13px]" />
             <span>{t('error')}</span>
           </button>
           <pre class="max-h-52 overflow-auto px-2 pb-2 font-mono text-[11px] whitespace-pre-wrap text-destructive">{toolState?.error}</pre>
@@ -188,8 +185,8 @@
           class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
           onclick={() => (contentOpen = !contentOpen)}
         >
-          {#if contentOpen}<ChevronDown class="size-3.5" />{:else}<ChevronRight class="size-3.5" />{/if}
-          <FileText class="size-[13px] text-primary" />
+          {#if contentOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
+          <AppIcons.file class="size-[13px] text-primary" />
           <span>{t('toolContent')}</span>
         </button>
         {#if contentOpen}
@@ -229,22 +226,22 @@
             class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
             onclick={() => (metaOpen = !metaOpen)}
           >
-            {#if metaOpen}<ChevronDown class="size-3.5" />{:else}<ChevronRight class="size-3.5" />{/if}
-            <Info class="size-[13px] text-primary" />
+            {#if metaOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
+            <AppIcons.info class="size-[13px] text-primary" />
             <span>{t('metadata')}</span>
           </button>
           {#if metaOpen}
             <div class="px-2 pb-2">
               {#if changeId}
                 <div class="flex items-center gap-1 pb-1 text-micro">
-                  <GitCommitHorizontal class="size-[13px] text-primary" />
+                  <AppIcons.commit class="size-[13px] text-primary" />
                   <span class="text-muted-foreground">change_id</span>
                   <span class="min-w-0 truncate font-mono text-primary">{changeId}</span>
                 </div>
               {/if}
               {#if (additions ?? 0) > 0 || (deletions ?? 0) > 0}
                 <div class="flex items-center gap-1 pb-1 text-micro">
-                  <Diff class="size-[13px] {deletions ? 'text-destructive' : 'text-success'}" />
+                  <AppIcons.diff class="size-[13px] {deletions ? 'text-destructive' : 'text-success'}" />
                   <span class="text-muted-foreground">diff</span>
                   <span class="font-mono {deletions ? 'text-destructive' : 'text-success'}">+{additions ?? 0} -{deletions ?? 0}</span>
                 </div>

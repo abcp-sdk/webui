@@ -1,7 +1,7 @@
 <script lang="ts">
   // shadcn-svelte-style Dialog (bits-ui primitive) with the shared card chrome.
   import { Dialog as DialogPrimitive } from 'bits-ui'
-  import { X } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   import type { Snippet } from 'svelte'
   import { cn } from '$lib/utils'
 
@@ -54,7 +54,7 @@
         class="absolute top-3 right-3 rounded-sm text-muted-foreground opacity-70 transition-opacity hover:opacity-100"
         aria-label="Close"
       >
-        <X class="size-4" />
+        <AppIcons.close class="size-4" />
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
   </DialogPrimitive.Portal>

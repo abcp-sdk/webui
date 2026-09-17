@@ -8,7 +8,7 @@
   import { sessionName } from '$lib/models'
   import { t } from '$lib/i18n.svelte'
   import { cn } from '$lib/utils'
-  import { Check, ChevronDown, ChevronUp } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   import ChatAvatar from '$lib/components/ChatAvatar.svelte'
 
   let {
@@ -85,7 +85,7 @@
       )}
     >
       {#if selected}
-        <Check class="size-4" />
+        <AppIcons.check class="size-4" />
       {:else}
         <span class="size-4 rounded-full border border-muted-foreground/50"></span>
       {/if}
@@ -122,7 +122,7 @@
           }}
         >
           {t('subsessionCount', { arg1: childCount })}
-          {#if expanded}<ChevronUp class="size-[13px]" />{:else}<ChevronDown class="size-[13px]" />{/if}
+          {#if expanded}<AppIcons.chevron_up class="size-[13px]" />{:else}<AppIcons.chevron_down class="size-[13px]" />{/if}
         </span>
       {/if}
       <!-- Fixed-width right-aligned slot: every trailing chip ends at the same

@@ -8,7 +8,7 @@
   import type { PageProps } from './page-props'
   import { t } from './i18n.svelte'
   import { cn } from './utils'
-  import { MessageSquare, Settings } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   import SessionList from './pages/SessionList.svelte'
   import Chat from './pages/Chat.svelte'
   import Mailbox from './pages/Mailbox.svelte'
@@ -98,7 +98,7 @@
           )}
           onclick={() => store.switchTab(tb.id)}
         >
-          {#if tb.id === 'chat'}<MessageSquare class="size-[22px]" />{:else}<Settings class="size-[22px]" />{/if}
+          {#if tb.id === 'chat'}<AppIcons.chat class="size-[22px]" />{:else}<AppIcons.settings class="size-[22px]" />{/if}
           <span class="text-micro">{t(tb.label)}</span>
         </button>
       {/each}
@@ -136,7 +136,7 @@
           )}
           onclick={() => store.switchTab(tb.id)}
         >
-          {#if tb.id === 'chat'}<MessageSquare class="size-[22px]" />{:else}<Settings class="size-[22px]" />{/if}
+          {#if tb.id === 'chat'}<AppIcons.chat class="size-[22px]" />{:else}<AppIcons.settings class="size-[22px]" />{/if}
           <span class="text-micro">{t(tb.label)}</span>
         </button>
       {/each}

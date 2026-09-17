@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Trash2, CircleDot, Circle } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   // PresetsDetail — web port of flutter config.dart _PresetsDetail: the preset
   // list with default-preset pick, edit dialog and delete.
   import type { AppStore } from '$lib/store.svelte'
@@ -107,14 +107,14 @@
               class={defaultPreset === p.id ? 'text-primary' : 'text-muted-foreground'}
               title={t('defaultPreset')}
               onclick={() => void setDefault(p)}
-            >{#if defaultPreset === p.id}<CircleDot class="size-4 text-primary" />{:else}<Circle class="size-4 text-muted-foreground" />{/if}</button>
+            >{#if defaultPreset === p.id}<AppIcons.target class="size-4 text-primary" />{:else}<AppIcons.circle class="size-4 text-muted-foreground" />{/if}</button>
             <span class="min-w-0 flex-1 truncate text-body font-medium">{p.id}</span>
             {#if p.isSystem}
               <span class="rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">system</span>
             {/if}
             <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('edit')} onclick={() => beginEdit(p)}>✎</button>
             {#if !p.isSystem}
-              <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('delete')} onclick={() => void remove(p)}><Trash2 class="size-4" /></button>
+              <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('delete')} onclick={() => void remove(p)}><AppIcons.delete class="size-4" /></button>
             {/if}
           </div>
           {#if p.systemPrompt}

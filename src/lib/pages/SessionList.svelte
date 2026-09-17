@@ -9,7 +9,7 @@
   import { sessionName } from '$lib/models'
   import SessionRow from '$lib/components/SessionRow.svelte'
   import { cn } from '$lib/utils'
-  import { X, ListChecks, Trash2, Search, Plus } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
 
   let { store }: PageProps = $props()
 
@@ -165,16 +165,16 @@
 <div class="flex h-full w-full flex-col">
   <header class="flex h-12 shrink-0 items-center gap-1 border-b border-border px-2">
     {#if selectMode}
-      <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('cancel')} onclick={exitSelect}><X class="size-[18px]" /></button>
+      <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('cancel')} onclick={exitSelect}><AppIcons.close class="size-[18px]" /></button>
       <span class="flex-1 truncate px-1 text-sm font-semibold">{t('selectedCount', { n: selected.size })}</span>
-      <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('selectAll')} onclick={toggleAll}><ListChecks class="size-[18px]" /></button>
+      <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('selectAll')} onclick={toggleAll}><AppIcons.list class="size-[18px]" /></button>
       <button
         type="button"
         class={cn('rounded p-1.5 hover:bg-muted', selected.size ? 'text-destructive' : 'text-muted-foreground')}
         title={t('delete')}
         onclick={() => void deleteSelected()}
         disabled={!selected.size}
-      ><Trash2 class="size-[18px]" /></button>
+      ><AppIcons.delete class="size-[18px]" /></button>
     {:else if searching}
       <button
         type="button"
@@ -191,9 +191,9 @@
       />
     {:else}
       <span class="flex-1 truncate px-2 text-base font-semibold">{t('tabChat')}</span>
-      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('search')} onclick={() => (searching = true)}><Search class="size-[18px]" /></button>
-      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('selectSessions')} onclick={() => (selectMode = true)}><ListChecks class="size-[18px]" /></button>
-      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('newSession')} onclick={() => void create()}><Plus class="size-[18px]" /></button>
+      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('search')} onclick={() => (searching = true)}><AppIcons.search class="size-[18px]" /></button>
+      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('selectSessions')} onclick={() => (selectMode = true)}><AppIcons.list class="size-[18px]" /></button>
+      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('newSession')} onclick={() => void create()}><AppIcons.add class="size-[18px]" /></button>
     {/if}
   </header>
 

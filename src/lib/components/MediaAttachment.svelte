@@ -6,7 +6,7 @@
   import { t } from '$lib/i18n.svelte'
   import { downloadFile, formatBytes, mediaUrl, mimeToKind } from '$lib/media'
   import { cn } from '$lib/utils'
-  import { FileText, Film, Music, Download, X } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
 
   let {
     api,
@@ -63,12 +63,12 @@
     {#if kind === 'image' && shown}
       <img src={shown} alt={name} class="size-full object-cover" />
     {:else if shown && (kind === 'audio')}
-      <Music class="m-auto size-5 text-muted-foreground" />
+      <AppIcons.music class="m-auto size-5 text-muted-foreground" />
     {:else if shown && kind === 'video'}
-      <Film class="m-auto size-5 text-muted-foreground" />
+      <AppIcons.film class="m-auto size-5 text-muted-foreground" />
     {:else}
       <span class="flex size-full flex-col items-center justify-center gap-0.5 text-micro text-muted-foreground">
-        <FileText class="size-4" />
+        <AppIcons.file class="size-4" />
       </span>
     {/if}
   </button>
@@ -87,12 +87,12 @@
         class="flex items-center gap-2 rounded-md border border-border/50 bg-muted/50 px-2.5 py-1.5 text-meta hover:bg-muted"
         onclick={() => void downloadFile(api, code, name)}
       >
-        <FileText class="size-4" />
+        <AppIcons.file class="size-4" />
         <span class="max-w-56 truncate">{name || code}</span>
         {#if size}
           <span class="text-micro text-muted-foreground">{formatBytes(size)}</span>
         {/if}
-        <Download class="size-3 text-muted-foreground" />
+        <AppIcons.download class="size-3 text-muted-foreground" />
       </button>
     {:else}
       <span class="flex items-center gap-2 rounded-md border border-border/40 px-2.5 py-1.5 text-meta text-muted-foreground">
@@ -128,7 +128,7 @@
       class={cn('absolute top-4 right-4 rounded-full bg-white/10 px-3 py-1.5 text-sm text-white hover:bg-white/20')}
       onclick={() => (viewerOpen = false)}
     >
-      <X class="size-5" />
+      <AppIcons.close class="size-5" />
     </button>
   </div>
 {/if}

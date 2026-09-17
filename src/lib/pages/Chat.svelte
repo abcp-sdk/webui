@@ -19,7 +19,7 @@
   import { Popover } from '$lib/components/ui/popover'
   import { Select } from '$lib/components/ui/select'
   import { Dialog } from '$lib/components/ui/dialog'
-  import { Camera, FileText, Image, Mic, Keyboard, Plus, Send, Square, X, ChevronLeft, LoaderCircle, RotateCcw, Download, MessageSquare } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
   import MessageBubble from '$lib/components/MessageBubble.svelte'
   import MediaAttachment from '$lib/components/MediaAttachment.svelte'
 
@@ -311,7 +311,7 @@
     return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
   }
 
-  /** Camera capture (flutter `_pickImage(ImageSource.camera)`). */
+  /** AppIcons.camera capture (flutter `_pickImage(ImageSource.camera)`). */
   function takePhoto() {
     const input = document.createElement('input')
     input.type = 'file'
@@ -469,7 +469,7 @@
     <!-- top bar -->
     <header class="relative flex h-12 shrink-0 items-center border-b border-border/50 px-1">
       <div class="flex min-w-0 items-center gap-2">
-        <button type="button" class="rounded p-1.5 hover:bg-muted" aria-label="back" onclick={() => store.popPage()}><ChevronLeft class="size-[18px]" /></button>
+        <button type="button" class="rounded p-1.5 hover:bg-muted" aria-label="back" onclick={() => store.popPage()}><AppIcons.chevron_left class="size-[18px]" /></button>
         <span class={cn('size-2 rounded-full', ctrl.sending ? 'bg-warning' : 'bg-success')}></span>
         {#if ctxLabel}
           <span class="text-micro text-muted-foreground tabular-nums">{ctxLabel}</span>
@@ -551,7 +551,7 @@
                 onclick={() => (a.uploadState === 'error' ? void retryUpload(a) : removeAttachment(a))}
                 title={a.uploadState === 'error' ? t('retry') : t('delete')}
               >
-                {#if a.uploadState === 'uploading'}<LoaderCircle class="size-2.5 animate-spin" />{:else if a.uploadState === 'error'}<RotateCcw class="size-2.5" />{:else}<X class="size-2.5" />{/if}
+                {#if a.uploadState === 'uploading'}<AppIcons.spinner class="size-2.5 animate-spin" />{:else if a.uploadState === 'error'}<AppIcons.revert class="size-2.5" />{:else}<AppIcons.close class="size-2.5" />{/if}
               </button>
             </div>
           {/each}
@@ -567,7 +567,7 @@
           disabled={ctrl.sending}
           onclick={() => (voiceMode = !voiceMode)}
         >
-          {#if voiceMode}<Keyboard class="size-[22px]" />{:else}<Mic class="size-[22px]" />{/if}
+          {#if voiceMode}<AppIcons.keyboard class="size-[22px]" />{:else}<AppIcons.mic class="size-[22px]" />{/if}
         </button>
 
         {#if voiceMode}
@@ -608,13 +608,13 @@
         {/if}
 
         {#if ctrl.sending}
-          <button type="button" class="rounded-full bg-destructive p-2 text-white" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><Square class="size-5" /></button>
+          <button type="button" class="rounded-full bg-destructive p-2 text-white" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><AppIcons.stop class="size-5" /></button>
         {:else if sending}
-          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground" title={t('connecting')} aria-label={t('connecting')} disabled><LoaderCircle class="size-5 animate-spin" /></button>
+          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground" title={t('connecting')} aria-label={t('connecting')} disabled><AppIcons.spinner class="size-5 animate-spin" /></button>
         {:else if canSend()}
-          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void send()}><Send class="size-5" /></button>
+          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void send()}><AppIcons.send class="size-5" /></button>
         {:else}
-          <button type="button" class="rounded-full bg-muted p-2 text-foreground hover:bg-muted/80" title={t('attach')} aria-label={t('attach')} onclick={() => (attachOpen = true)}><Plus class="size-5" /></button>
+          <button type="button" class="rounded-full bg-muted p-2 text-foreground hover:bg-muted/80" title={t('attach')} aria-label={t('attach')} onclick={() => (attachOpen = true)}><AppIcons.add class="size-5" /></button>
         {/if}
       </div>
     </div>
@@ -625,13 +625,13 @@
         <div class="w-full rounded-t-xl border-t border-border bg-card pb-3" onclick={e => e.stopPropagation()}>
           <div class="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-muted-foreground/30"></div>
           <button type="button" class="flex w-full items-center gap-4 px-4 py-3 text-left text-body hover:bg-muted" onclick={() => { attachOpen = false; takePhoto() }}>
-            <Camera class="size-[22px]" /> {t('takePhoto')}
+            <AppIcons.camera class="size-[22px]" /> {t('takePhoto')}
           </button>
           <button type="button" class="flex w-full items-center gap-4 px-4 py-3 text-left text-body hover:bg-muted" onclick={() => { attachOpen = false; pickFiles('image/*') }}>
-            <Image class="size-[22px]" /> {t('chooseImage')}
+            <AppIcons.image class="size-[22px]" /> {t('chooseImage')}
           </button>
           <button type="button" class="flex w-full items-center gap-4 px-4 py-3 text-left text-body hover:bg-muted" onclick={() => { attachOpen = false; pickFiles('') }}>
-            <FileText class="size-[22px]" /> {t('chooseFile')}
+            <AppIcons.file class="size-[22px]" /> {t('chooseFile')}
           </button>
         </div>
       </div>
@@ -641,7 +641,7 @@
     {#if dragging}
       <div class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-primary/8">
         <div class="flex items-center gap-2 rounded-lg border-2 border-primary bg-card px-4 py-3 text-body">
-          <Download class="size-6" />
+          <AppIcons.download class="size-6" />
           {t('dropToAttach')}
         </div>
       </div>
@@ -653,7 +653,7 @@
     {#snippet children()}
       <div class="space-y-2">
         <div class="flex items-center gap-2">
-          <MessageSquare class="size-4 text-primary" />
+          <AppIcons.chat class="size-4 text-primary" />
           <span class="truncate text-meta font-bold">{session?.id}</span>
         </div>
         {#each [

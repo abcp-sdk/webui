@@ -18,7 +18,7 @@
   import Overlays from './lib/components/Overlays.svelte'
   import { Button } from './lib/components/ui/button'
   import { Input } from './lib/components/ui/input'
-  import { Trash2, Plus, Eye, EyeOff, CircleDot, LayoutGrid } from '@lucide/svelte'
+  import { AppIcons } from '$lib/icons'
 
   type Phase = 'loading' | 'setup' | 'backends' | 'app'
 
@@ -194,19 +194,19 @@
       <div class="space-y-2">
         {#each backends as b (b.baseUrl)}
           <div class="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
-            {#if b.baseUrl === baseUrl}<CircleDot class="size-4 text-primary" />{:else}<LayoutGrid class="size-4 text-muted-foreground" />{/if}
+            {#if b.baseUrl === baseUrl}<AppIcons.target class="size-4 text-primary" />{:else}<AppIcons.apps class="size-4 text-muted-foreground" />{/if}
             <span class="min-w-0 flex-1">
               <span class="block truncate text-body">{b.name || b.baseUrl}</span>
               <span class="block truncate text-micro text-muted-foreground">{b.baseUrl}</span>
             </span>
-            <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('deleteBackend')} onclick={() => void deleteBackend(b)}><Trash2 class="size-4" /></button>
+            <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('deleteBackend')} onclick={() => void deleteBackend(b)}><AppIcons.delete class="size-4" /></button>
             <Button size="sm" variant="outline" onclick={() => void switchBackend(b)}>{t('connect')}</Button>
           </div>
         {/each}
       </div>
       <div class="mt-4 border-t border-border pt-2">
         <button type="button" class="flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left hover:bg-muted" onclick={logout}>
-          <Plus class="size-4" />
+          <AppIcons.add class="size-4" />
           <span class="text-body">{t('addBackend')}</span>
         </button>
       </div>
@@ -228,7 +228,7 @@
             type="button"
             class="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground"
             onclick={() => (showToken = !showToken)}
-          >{#if showToken}<EyeOff class="size-4" />{:else}<Eye class="size-4" />{/if}</button>
+          >{#if showToken}<AppIcons.eye_off class="size-4" />{:else}<AppIcons.eye class="size-4" />{/if}</button>
         </span>
       </label>
       <Button class="w-full" disabled={!canConnect} onclick={() => void connect()}>
