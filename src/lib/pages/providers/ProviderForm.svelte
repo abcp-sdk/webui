@@ -7,7 +7,8 @@
   import { t } from '$lib/i18n.svelte'
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import { loadModelsDev, npmToType, type MdProvider } from '$lib/modelsdev'
-  import { apiTypeLabelKey } from './common'
+  import CapabilityIcon from './CapabilityIcon.svelte'
+  import { apiTypeLabelKey, apiTypesForCapability, capabilityLabelKey } from './common'
   import ModelRow from './ModelRow.svelte'
 
   let { store, showBack = false }: PageProps = $props()
@@ -67,16 +68,28 @@
     const d = store.providerDraft
     if (!d) return
     templateOpen = false
+    const isText = d.capability === 'text'
     d.id = p.name.toLowerCase().replace(/\s+/g, '-')
     d.baseUrl = url
     d.apiType = npmToType(p.npm)
+    // A non-text provider has no chat models: the catalog's context limits
+    // only apply to the text modality.
     d.models = p.models
       .filter(m => m.attachment !== true || true)
-      .map(m => ({ id: m.id, name: m.name, contextLimit: m.contextLimit ?? 0, modelType: 'text' }))
+      .map(m => ({
+        id: m.id,
+        name: m.name,
+        contextLimit: isText ? (m.contextLimit ?? 0) : 0,
+        modelType: isText ? 'text' : d.capability,
+      }))
     id = d.id
     apiType = d.apiType
     if (!url && p.description) url = ''
   }
+
+  const availableApiTypes = $derived(
+    apiTypesForCapability(store.providerCatalog, draft?.capability ?? 'text'),
+  )
 
   function removeModel(mid: string) {
     const d = store.providerDraft
@@ -92,7 +105,8 @@
     d.baseUrl = url.trim()
     d.apiKey = key
     if (!d.id || !d.baseUrl) return
-    if (d.models.some(m => (m.contextLimit ?? 0) <= 0)) {
+    // Context limit is required (> 0) for TEXT providers only.
+    if (d.capability === 'text' && d.models.some(m => (m.contextLimit ?? 0) <= 0)) {
       showToast(t('contextLengthRequired'))
       return
     }
@@ -100,6 +114,7 @@
     try {
       await store.api.registerProvider({
         providerId: d.id,
+        capability: d.capability,
         apiType: d.apiType,
         baseUrl: d.baseUrl,
         apiKey: d.apiKey,
@@ -154,7 +169,7 @@
       <label class="block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('apiType')}</span>
         <select bind:value={apiType} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring">
-          {#each Object.keys(store.providerCatalog) as ty (ty)}
+          {#each availableApiTypes as ty (ty)}
             <option value={ty}>{t(apiTypeLabelKey(ty))}</option>
           {/each}
         </select>

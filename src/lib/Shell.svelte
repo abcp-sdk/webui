@@ -15,9 +15,7 @@
   import Config from './pages/Config.svelte'
   import ProvidersList from './pages/providers/ProvidersList.svelte'
   import ProviderForm from './pages/providers/ProviderForm.svelte'
-  import GatewayForm from './pages/providers/GatewayForm.svelte'
   import ProviderModelForm from './pages/providers/ProviderModelForm.svelte'
-  import GatewayModelForm from './pages/providers/GatewayModelForm.svelte'
   import PresetForm from './pages/PresetForm.svelte'
 
   let {
@@ -60,12 +58,8 @@
         return ProvidersList as Component<PageProps>
       case 'provider_form':
         return ProviderForm as Component<PageProps>
-      case 'gateway_form':
-        return GatewayForm as Component<PageProps>
       case 'provider_models':
         return ProviderModelForm as Component<PageProps>
-      case 'gateway_model':
-        return GatewayModelForm as Component<PageProps>
       case 'preset_form':
         return PresetForm as Component<PageProps>
     }
@@ -119,7 +113,7 @@
           showBack={p.isTop}
           initialId={p.page.kind === 'config_sub' ? p.page.id : undefined}
           overlay={p.page.kind === 'chat_overlay' ? p.page.overlay : undefined}
-          modelId={p.page.kind === 'provider_models' || p.page.kind === 'gateway_model' ? p.page.modelId : undefined}
+          modelId={p.page.kind === 'provider_models' ? p.page.modelId : undefined}
         />
       </div>
     {/each}

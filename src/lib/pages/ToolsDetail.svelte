@@ -63,6 +63,16 @@
     })
   }
 
+  /** Registered models of [capability] as `provider_id/model_id` refs. */
+  function modelRefs(capability: string): string[] {
+    const out: string[] = []
+    for (const p of Object.values(providers)) {
+      if (p.capability !== capability) continue
+      for (const m of p.models) out.push(`${p.providerId}/${m.id}`)
+    }
+    return out.sort()
+  }
+
   function knobValue(tl: ToolInfo, knob: ToolConfig): string {
     const k = `${tl.name}.${knob.name}`
     if (k in drafts) return drafts[k]
@@ -139,7 +149,22 @@
                       <span class="text-micro text-muted-foreground">— {knob.description}</span>
                     {/if}
                   </span>
-                  {#if knob.type === 'enum' && knob.enumValues.length}
+                  {#if knob.kind === 'model'}
+                    <!-- Declared model reference: pick from the models
+                         registered under the knob's modality. -->
+                    <div class="flex gap-2">
+                      <select
+                        value={knobValue(tl, knob)}
+                        class="h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
+                        onchange={e => void saveExtConfig(tl, knob, e.currentTarget.value)}
+                      >
+                        <option value="">{t('none')}</option>
+                        {#each modelRefs(knob.capability) as ref (ref)}
+                          <option value={ref}>{ref}</option>
+                        {/each}
+                      </select>
+                    </div>
+                  {:else if knob.type === 'enum' && knob.enumValues.length}
                     <select
                       value={knobValue(tl, knob)}
                       class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"

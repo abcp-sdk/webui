@@ -458,6 +458,7 @@ export class AgentApi {
     for (const p of r.providers) {
       out[p.providerId] = {
         providerId: p.providerId,
+        capability: p.capability || 'text',
         apiType: p.apiType,
         baseUrl: p.baseUrl,
         apiKey: p.apiKey,
@@ -477,6 +478,7 @@ export class AgentApi {
     await this._c.registerProvider({
       provider: {
         providerId: p.providerId,
+        capability: p.capability,
         apiType: p.apiType,
         baseUrl: p.baseUrl,
         apiKey: p.apiKey,
@@ -493,24 +495,6 @@ export class AgentApi {
 
   async deleteProvider(pid: string): Promise<void> {
     await this._c.deleteProvider({ providerId: pid })
-  }
-
-  async discoverGatewayModels(opts: {
-    providerId: string
-    apiType: string
-    baseUrl: string
-    apiKey: string
-  }): Promise<{ models: ProviderModel[]; error: string }> {
-    const r = await this._c.discoverGatewayModels(opts)
-    return {
-      models: r.models.map(m => ({
-        id: m.id,
-        name: m.name,
-        contextLimit: n(m.contextLimit),
-        modelType: m.modelType,
-      })),
-      error: r.error,
-    }
   }
 
   async testProvider(opts: {
@@ -594,6 +578,8 @@ export class AgentApi {
         (c): ToolConfig => ({
           name: c.name,
           type: c.type,
+          kind: c.kind || 'value',
+          capability: c.capability,
           enumValues: [...c.enumValues],
           defaultValue: c.default ? valueToJson(c.default) : null,
           description: c.description,

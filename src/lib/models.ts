@@ -2,16 +2,27 @@
  * types only). Used until ListProvidersCatalog answers; the server response
  * overrides it. */
 export const FALLBACK_API_TYPE_CAPABILITIES: Record<string, string[]> = {
-  'openai-compatible': ['text', 'embedding', 'image', 'speech', 'transcription'],
-  'openai': ['text', 'embedding', 'image', 'speech', 'transcription'],
+  'openai-compatible': [
+    'text', 'embedding', 'image', 'speech', 'transcription', 'realtime',
+  ],
+  'openai': [
+    'text', 'embedding', 'image', 'speech', 'transcription', 'realtime',
+  ],
   'anthropic': ['text'],
   'deepseek': ['text'],
   'google': ['text'],
   'vercel-compatible-gateway': [
     'text', 'image', 'video', 'speech', 'transcription', 'embedding', 'rerank',
+    'realtime',
   ],
   'cohere': ['text', 'rerank'],
 }
+
+/** The 8 first-class modalities, in section order. */
+export const kModelCapabilities = [
+  'text', 'image', 'video', 'speech', 'transcription', 'embedding', 'rerank',
+  'realtime',
+] as const
 
 // Domain models — direct port of flutter/lib/models.dart (the subset the UI
 // uses; legacy container/ops models are intentionally omitted).
@@ -185,6 +196,10 @@ export interface ToolConfigField {
 export interface ToolConfig {
   name: string
   type: string // string | number | boolean | enum | json
+  /** `value` (ordinary knob) or `model` (a provider_id/model_id reference). */
+  kind: string
+  /** When kind == 'model': the modality the reference must match. */
+  capability: string
   enumValues: string[]
   defaultValue?: unknown
   description: string
@@ -264,6 +279,8 @@ export interface ProviderModel {
 
 export interface ProviderInfo {
   providerId: string
+  /** The single modality this provider serves (semantic grouping). */
+  capability: string
   apiType: string
   baseUrl: string
   apiKey: string
@@ -274,6 +291,7 @@ export interface ProviderInfo {
 export interface ProviderDraft {
   originalId: string | null
   id: string
+  capability: string
   apiType: string
   baseUrl: string
   apiKey: string
@@ -284,6 +302,7 @@ export function draftFromProvider(p: ProviderInfo): ProviderDraft {
   return {
     originalId: p.providerId,
     id: p.providerId,
+    capability: p.capability,
     apiType: p.apiType,
     baseUrl: p.baseUrl,
     apiKey: p.apiKey,

@@ -8,6 +8,7 @@
   import { loadModelsDev } from '$lib/modelsdev'
   import { capabilityLabelKey } from './common'
   import { AppIcons } from '$lib/icons'
+  import CapabilityIcon from './CapabilityIcon.svelte'
 
   let { store, showBack = false, modelId = null }: PageProps & { modelId?: string | null } = $props()
 
@@ -18,27 +19,17 @@
   let mid = $state('')
   let name = $state('')
   let ctx = $state('')
-  // Declared capability (model_type); options come from the capability matrix
-  // for the DRAFT provider's api type.
-  let capability = $state('text')
+  // The model's modality IS the draft provider's (semantic grouping): it is
+  // read-only here.
+  const capability = $derived(store.providerDraft?.capability ?? 'text')
   let testing = $state(false)
   let testOk = $state<boolean | null>(null)
   let testMsg = $state('')
-
-  const capabilities = $derived.by(() => {
-    const d = store.providerDraft
-    if (!d) return ['text']
-    return store.providerCatalog[d.apiType] ?? ['text']
-  })
 
   $effect(() => {
     mid = existing?.id ?? ''
     name = existing?.name ?? ''
     ctx = existing && (existing.contextLimit ?? 0) > 0 ? String(existing.contextLimit) : ''
-    capability =
-      existing && capabilities.includes(existing.modelType)
-        ? existing.modelType
-        : 'text'
   })
 
   const canSave = $derived(mid.trim() !== '')
@@ -135,14 +126,10 @@
         <input bind:value={name} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
       </label>
 
-      <label class="block">
-        <span class="mb-1 block text-meta text-muted-foreground">{t('capabilityLabel')}</span>
-        <select bind:value={capability} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring">
-          {#each capabilities as cap (cap)}
-            <option value={cap}>{t(capabilityLabelKey(cap))}</option>
-          {/each}
-        </select>
-      </label>
+      <div class="flex items-center gap-2 rounded-md border border-input px-3 py-2.5">
+        <CapabilityIcon {capability} size={18} />
+        <span class="text-meta text-muted-foreground">{t(capabilityLabelKey(capability))}</span>
+      </div>
 
       {#if capability === 'text'}
         <label class="block">

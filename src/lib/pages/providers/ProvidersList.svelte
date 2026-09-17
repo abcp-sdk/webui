@@ -7,7 +7,8 @@
   import type { ProviderInfo } from '$lib/models'
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast } from '$lib/toast.svelte'
-  import { GATEWAY_API_TYPE, GATEWAY_PROVIDER_ID, isGatewayProvider, apiTypeLabelKey } from './common'
+  import CapabilityIcon from './CapabilityIcon.svelte'
+  import { MODEL_CAPABILITIES, apiTypeLabelKey, capabilityLabelKey } from './common'
 
   let { store, showBack = false }: PageProps = $props()
 
@@ -56,6 +57,7 @@
   const defaultRefs = $derived.by(() => {
     const refs: string[] = []
     for (const p of allProviders) {
+      if (p.capability !== 'text') continue
       for (const m of p.models) {
         if ((m.contextLimit ?? 0) > 0) refs.push(`${p.providerId}/${m.id}`)
       }
@@ -76,8 +78,8 @@
     }
   }
 
-  function addText() {
-    store.beginProviderDraft(null)
+  function add(capability: string) {
+    store.beginProviderDraft(null, capability)
     store.pushPage({ kind: 'provider_form', key: 'provider_form' })
   }
 
@@ -86,17 +88,12 @@
     store.pushPage({ kind: 'provider_form', key: 'provider_form' })
   }
 
-  function editGateway(p?: ProviderInfo) {
-    store.beginProviderDraft(
-      p ?? {
-        providerId: GATEWAY_PROVIDER_ID,
-        apiType: GATEWAY_API_TYPE,
-        baseUrl: '',
-        apiKey: '',
-        models: [],
-      },
-    )
-    store.pushPage({ kind: 'gateway_form', key: 'gateway_form' })
+  function byCapability(capability: string): ProviderInfo[] {
+    return allProviders.filter(p => p.capability === capability)
+  }
+
+  function capabilityLabel(capability: string): string {
+    return t(capabilityLabelKey(capability))
   }
 
   function apiTypeLabel(apiType: string): string {
@@ -111,7 +108,6 @@
       <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
     {/if}
     <span class="text-sm font-semibold">{t('llmProviders')}</span>
-    <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('addProvider')} onclick={addText}><AppIcons.add class="size-[18px]" /></button>
   </header>
 
   <div class="min-h-0 flex-1 overflow-y-auto">
@@ -120,42 +116,47 @@
         <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
       </div>
     {:else}
-      <div class="px-4 pt-4 pb-1 text-micro font-semibold tracking-wider text-muted-foreground">{t('providersSection')}</div>
-
-      <!-- default model tile -->
-      <button
-        type="button"
-        class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted"
-        onclick={() => (pickOpen = true)}
-      >
-        <AppIcons.star class="size-5 shrink-0 text-primary" />
-        <span class="min-w-0 flex-1">
-          <span class="block text-body font-medium">{t('defaultModel')}</span>
-          <span class="block truncate text-micro text-muted-foreground">{defaultModel || t('none')}</span>
-        </span>
-        <AppIcons.chevron_right class="size-4 text-muted-foreground" />
-      </button>
-
       {#if allProviders.length === 0}
-        <p class="px-4 py-2 text-meta text-muted-foreground">{t('noProviders')}</p>
+        <p class="px-4 py-3 text-meta text-muted-foreground">{t('noProviders')}</p>
       {/if}
-      {#each allProviders as p (p.providerId)}
-        <button
-          type="button"
-          class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted"
-          onclick={() => (isGatewayProvider(p.apiType) ? editGateway(p) : edit(p))}
-        >
-          {#if isGatewayProvider(p.apiType)}
-            <AppIcons.network class="size-5 shrink-0 text-success" />
-          {:else}
-            <AppIcons.server class="size-5 shrink-0 text-primary" />
-          {/if}
-          <span class="min-w-0 flex-1">
-            <span class="block text-body font-medium">{p.providerId}</span>
-            <span class="block truncate text-micro text-muted-foreground">{apiTypeLabel(p.apiType)} · {t('modelsCount', { n: p.models.length })}</span>
-          </span>
-          <AppIcons.chevron_right class="size-4 text-muted-foreground" />
-        </button>
+      <!-- ONE SECTION PER MODALITY (semantic grouping). Only TEXT carries the
+           tenant default model. -->
+      {#each MODEL_CAPABILITIES as cap (cap)}
+        <div class="flex items-center px-4 pt-4 pb-1">
+          <span class="min-w-0 flex-1 text-micro font-semibold tracking-wider text-muted-foreground uppercase">{capabilityLabel(cap)}</span>
+          <button type="button" class="rounded p-1 text-primary hover:bg-muted" title={t('addProvider')} onclick={() => add(cap)}><AppIcons.add class="size-4" /></button>
+        </div>
+
+        {#if cap === 'text'}
+          <!-- default model tile -->
+          <button
+            type="button"
+            class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted"
+            onclick={() => (pickOpen = true)}
+          >
+            <AppIcons.star class="size-5 shrink-0 text-primary" />
+            <span class="min-w-0 flex-1">
+              <span class="block text-body font-medium">{t('defaultModel')}</span>
+              <span class="block truncate text-micro text-muted-foreground">{defaultModel || t('none')}</span>
+            </span>
+            <AppIcons.chevron_right class="size-4 text-muted-foreground" />
+          </button>
+        {/if}
+
+        {#each byCapability(cap) as p (p.providerId)}
+          <button
+            type="button"
+            class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted"
+            onclick={() => edit(p)}
+          >
+            <CapabilityIcon capability={p.capability} size={20} />
+            <span class="min-w-0 flex-1">
+              <span class="block text-body font-medium">{p.providerId}</span>
+              <span class="block truncate text-micro text-muted-foreground">{apiTypeLabel(p.apiType)} · {t('modelsCount', { n: p.models.length })}</span>
+            </span>
+            <AppIcons.chevron_right class="size-4 text-muted-foreground" />
+          </button>
+        {/each}
       {/each}
     {/if}
   </div>

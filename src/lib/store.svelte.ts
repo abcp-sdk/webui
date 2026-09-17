@@ -22,9 +22,7 @@ export type AppPage =
   | { kind: 'providers_list'; key: 'providers_list' }
   | { kind: 'preset_form'; key: 'preset_form_new' }
   | { kind: 'provider_form'; key: 'provider_form' }
-  | { kind: 'gateway_form'; key: 'gateway_form' }
   | { kind: 'provider_models'; key: string; modelId: string | null }
-  | { kind: 'gateway_model'; key: string; modelId: string | null }
 
 export function rootPageFor(tab: SiderTab): AppPage {
   return tab === 'chat' ? { kind: 'chat_list', key: 'chat_list' } : { kind: 'config_root', key: 'config_root' }
@@ -293,10 +291,11 @@ export class AppStore {
     this.providersRevision++
   }
 
-  beginProviderDraft(existing: ProviderInfo | null) {
+  beginProviderDraft(existing: ProviderInfo | null, capability = 'text') {
     this.providerDraft = existing ? draftFromProvider(existing) : {
       originalId: null,
       id: '',
+      capability,
       apiType: 'openai-compatible',
       baseUrl: '',
       apiKey: '',

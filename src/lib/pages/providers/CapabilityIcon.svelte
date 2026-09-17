@@ -12,6 +12,7 @@
       case 'speech': return AppIcons.audio
       case 'transcription': return AppIcons.mic_vocal
       case 'embedding': return AppIcons.scatter
+      case 'rerank':
       case 'reranking': return AppIcons.grip
       case 'realtime': return AppIcons.bolt
       default: return AppIcons.chat

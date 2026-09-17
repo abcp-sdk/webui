@@ -1,10 +1,6 @@
 // Shared provider helpers — port of the providers.dart top-level constants.
-export const GATEWAY_API_TYPE = 'vercel-compatible-gateway'
-export const GATEWAY_PROVIDER_ID = 'gateway'
-
-/** Capability tags (mirrors the server matrix; used when a form needs the
- * full list, e.g. the gateway model whose kind comes from discovery). */
-export const MULTIMODAL_CAPABILITIES = [
+/** The 8 first-class modalities, in section order. */
+export const MODEL_CAPABILITIES = [
   'text',
   'image',
   'video',
@@ -12,10 +8,19 @@ export const MULTIMODAL_CAPABILITIES = [
   'transcription',
   'embedding',
   'rerank',
+  'realtime',
 ] as const
 
-export function isGatewayProvider(apiType: string): boolean {
-  return apiType === GATEWAY_API_TYPE
+/** The api types that can serve a modality (from the server catalog). */
+export function apiTypesForCapability(
+  catalog: Record<string, string[]>,
+  capability: string,
+): string[] {
+  const out = Object.entries(catalog)
+    .filter(([, caps]) => caps.includes(capability))
+    .map(([t]) => t)
+    .sort()
+  return out.length ? out : ['openai-compatible']
 }
 
 /** Localized capability label key. */
@@ -55,7 +60,7 @@ export function apiTypeLabelKey(apiType: string): string {
       return 'apiTypeDeepseek'
     case 'cohere':
       return 'apiTypeCohere'
-    case GATEWAY_API_TYPE:
+    case 'vercel-compatible-gateway':
       return 'apiTypeGateway'
     default:
       return ''
