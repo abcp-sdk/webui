@@ -526,9 +526,9 @@
     </div>
 
     <!-- composer -->
-    <div class="shrink-0 border-t border-border/50 bg-card pt-1 pr-3 pb-0 pl-3">
+    <div class="shrink-0 border-t border-border/50 bg-card pt-[3px] pr-3 pb-0 pl-3">
       {#if attachments.length}
-        <div class="mb-2 flex flex-wrap gap-1">
+        <div class="mb-2 flex flex-wrap gap-1 pt-1">
           {#each attachments as a (a.code + a.name)}
             <div class="relative">
               <MediaAttachment
@@ -593,7 +593,7 @@
               bind:this={taEl}
               bind:value={text}
               rows="1"
-              class="max-h-40 flex-1 resize-none border-0 bg-transparent px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
+              class="max-h-40 min-h-[42px] flex-1 resize-none border-0 bg-transparent px-3 py-[10px] text-sm leading-[21px] outline-none placeholder:text-muted-foreground"
               placeholder={attachments.length ? '' : t('typeMessage')}
               onkeydown={onKeydown}
               onpaste={onPaste}
