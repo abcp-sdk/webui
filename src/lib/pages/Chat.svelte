@@ -558,10 +558,12 @@
         </div>
       {/if}
 
-      <div class="flex items-end gap-2">
+      <div class="flex items-center gap-2">
+        <!-- Left: mic/keyboard toggle. Same 42px slot as the action circle on
+             the right so the three slots share one center and symmetric gaps. -->
         <button
           type="button"
-          class="rounded-full p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-40"
+          class="flex size-[42px] shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted disabled:opacity-40"
           title={voiceMode ? t('keyboardMode') : t('voiceMode')}
           aria-label={voiceMode ? t('keyboardMode') : t('voiceMode')}
           disabled={ctrl.sending}
@@ -607,14 +609,17 @@
           </div>
         {/if}
 
+        <!-- Right: one morphing action circle — WHITE fill with a colored
+             outline + colored glyph (blue send / red stop / muted attach),
+             never a solid colored fill. -->
         {#if ctrl.sending}
-          <button type="button" class="rounded-full bg-destructive p-2 text-white" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><AppIcons.stop class="size-5" /></button>
+          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-destructive bg-card text-destructive" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><AppIcons.stop class="size-5" /></button>
         {:else if sending}
-          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground"></span></button>
+          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span></button>
         {:else if canSend()}
-          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void send()}><AppIcons.send class="size-5" /></button>
+          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void send()}><AppIcons.send class="size-5" /></button>
         {:else}
-          <button type="button" class="rounded-full bg-muted p-2 text-foreground hover:bg-muted/80" title={t('attach')} aria-label={t('attach')} onclick={() => (attachOpen = true)}><AppIcons.add class="size-5" /></button>
+          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground" title={t('attach')} aria-label={t('attach')} onclick={() => (attachOpen = true)}><AppIcons.add class="size-5" /></button>
         {/if}
       </div>
     </div>

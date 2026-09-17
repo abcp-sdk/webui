@@ -91,7 +91,9 @@
     try {
       // Empty means UNSET (there is no delete RPC): the store clears the knob
       // to its declared zero value; the picker then renders 无.
-      await store.api.setToolConfigValue(tl.name, knob.name, value)
+      // The owning EXTENSION id is `tool.category` (e.g. "bundled"); a tool
+      // name is NOT an extension (`no manifest for image-generate`).
+      await store.api.setToolConfigValue(tl.category, knob.name, value)
       // refresh local view
       const vals = { ...toolConfigValues(tl.name) }
       if (value === '') delete vals[knob.name]
