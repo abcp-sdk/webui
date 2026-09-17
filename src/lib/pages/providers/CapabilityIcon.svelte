@@ -5,7 +5,10 @@
 
   let { capability, size = 14 }: { capability: string; size?: number } = $props()
 
-  const icon = $derived.by(() => {
+  // Must be a CAPITALISED variable (or a member expression) so Svelte renders
+  // it as a component: a lowercase `<icon>` is treated as an unknown HTML
+  // element and silently draws nothing.
+  const Glyph = $derived.by(() => {
     switch (capability) {
       case 'image': return AppIcons.image
       case 'video': return AppIcons.video
@@ -29,4 +32,4 @@
   })
 </script>
 
-<icon class="{tone} shrink-0" style="width:{size}px;height:{size}px" />
+<Glyph class="{tone} shrink-0" style="width:{size}px;height:{size}px" />
