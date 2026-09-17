@@ -210,6 +210,7 @@
 
   <div
     class="min-h-0 flex-1 overflow-y-auto"
+    role="list"
     ontouchstart={onTouchStart}
     ontouchmove={onTouchMove}
   >

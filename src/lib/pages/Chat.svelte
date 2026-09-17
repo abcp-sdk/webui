@@ -626,8 +626,15 @@
 
     <!-- attach bottom sheet (flutter `_openAttachSheet`) -->
     {#if attachOpen}
-      <div class="fixed inset-0 z-[70] flex items-end bg-black/50" role="presentation" onclick={() => (attachOpen = false)}>
-        <div class="w-full rounded-t-xl border-t border-border bg-card pb-3" onclick={e => e.stopPropagation()}>
+      <div
+        class="fixed inset-0 z-[70] flex items-end bg-black/50"
+        role="presentation"
+        onclick={e => {
+          // Close on backdrop tap only (not when the tap lands on the sheet).
+          if (e.target === e.currentTarget) attachOpen = false
+        }}
+      >
+        <div class="w-full rounded-t-xl border-t border-border bg-card pb-3" role="presentation">
           <div class="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-muted-foreground/30"></div>
           <button type="button" class="flex w-full items-center gap-4 px-4 py-3 text-left text-body hover:bg-muted" onclick={() => { attachOpen = false; takePhoto() }}>
             <AppIcons.camera class="size-[22px]" /> {t('takePhoto')}

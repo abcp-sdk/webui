@@ -86,7 +86,9 @@
           <AppIcons.image_off class="size-4" /> {name || code}
         </span>
       {:else}
-        <img src={shown} onclick={open} onkeydown={e => e.key === 'Enter' && open()} onerror={() => (imgError = true)} alt={name || code} title={name || code} class="max-h-64 cursor-zoom-in rounded-md border border-border/50" />
+        <button type="button" class="rounded-md" onclick={open} aria-label={name || code} title={name || code}>
+          <img src={shown} onerror={() => (imgError = true)} alt={name || code} title={name || code} class="max-h-64 cursor-zoom-in rounded-md border border-border/50" />
+        </button>
       {/if}
     {:else if kind === 'video' && shown}
       <video src={shown} controls class="max-h-72 rounded-md border border-border/50"><track kind="captions" /></video>
