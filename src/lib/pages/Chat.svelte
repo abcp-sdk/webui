@@ -563,7 +563,7 @@
              the right so the three slots share one center and symmetric gaps. -->
         <button
           type="button"
-          class="flex size-[42px] shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted disabled:opacity-40"
+          class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted disabled:opacity-40"
           title={voiceMode ? t('keyboardMode') : t('voiceMode')}
           aria-label={voiceMode ? t('keyboardMode') : t('voiceMode')}
           disabled={ctrl.sending}

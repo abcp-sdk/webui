@@ -71,6 +71,42 @@
     void boot()
   })
 
+  // ---- browser Back / swipe-back drives the in-app navigation stack ----
+  // Every in-app "forward" navigation pushes a history entry; a popstate pops
+  // one in-app page and re-arms a sentinel entry so the NEXT back still has
+  // something to consume. Without this, the phone's edge-swipe / back button
+  // did nothing (or left the SPA), so no page obeyed the system gesture.
+  let navDepth = 0
+
+  function inAppDepth(): number {
+    if (!store || phase !== 'app') return 0
+    return store.currentStack.length - 1
+  }
+
+  if (typeof window !== 'undefined') {
+    window.history.replaceState({ agentNav: 0 }, '')
+    window.addEventListener('popstate', () => {
+      if (phase !== 'app' || !store) return
+      if (store.currentStack.length > 1) {
+        // Consume the back as one in-app pop … (pushState below does NOT fire
+        // popstate, so this never recurses).
+        store.popPage()
+        navDepth = inAppDepth()
+        window.history.pushState({ agentNav: navDepth + 1 }, '')
+        navDepth += 1
+      }
+    })
+  }
+
+  // Mirror in-app pushes into history so Back/swipe has depth to consume.
+  $effect(() => {
+    const target = inAppDepth()
+    for (let i = navDepth; i < target; i++) {
+      window.history.pushState({ agentNav: i + 1 }, '')
+    }
+    if (target > navDepth) navDepth = target
+  })
+
   // Where the connection form POINTS by default (the k3s standalone agent —
   // the same backend the other clients use). This is only a PREFILL for the
   // setup form: no token is ever baked in, so an install always starts at the

@@ -39,7 +39,7 @@ function compareMessages(a: ChatMessage, b: ChatMessage): number {
   const apt = Date.parse(a.createdAt || '') || 0
   const bpt = Date.parse(b.createdAt || '') || 0
   if (apt && bpt && apt !== bpt) return apt - bpt
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  return 0
 }
 
 export class MessagesController {
@@ -219,14 +219,20 @@ export class MessagesController {
     this.syncedTipId = tipId
   }
 
-  /** Assign sequential seqs in true CHAIN order (createdAt, then id). */
+  /** Assign sequential seqs in true CHAIN order. Ties on `createdAt` keep the
+   *  CURRENT array order (a stable sort), so a locally-appended user bubble
+   *  stays before the assistant streaming placeholder created right after it —
+   *  ordering by id (`m…` vs `u…`) would wrongly put the assistant first. */
   private renumber() {
-    const ordered = [...this.messages].sort((a, b) => {
-      const at = Date.parse(a.createdAt || '') || 0
-      const bt = Date.parse(b.createdAt || '') || 0
-      if (at !== bt) return at - bt
-      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
-    })
+    const ordered = this.messages
+      .map((m, i) => ({ m, i }))
+      .sort((a, b) => {
+        const at = Date.parse(a.m.createdAt || '') || 0
+        const bt = Date.parse(b.m.createdAt || '') || 0
+        if (at !== bt) return at - bt
+        return a.i - b.i
+      })
+      .map(x => x.m)
     this.messages = ordered.map((m, i) => ({ ...m, seq: i }))
     this.bumpSeqAfter(this.messages)
   }
