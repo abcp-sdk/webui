@@ -36,6 +36,7 @@ export function capabilityLabelKey(capability: string): string {
       return 'capTranscription'
     case 'embedding':
       return 'capEmbedding'
+    case 'rerank':
     case 'reranking':
       return 'capReranking'
     case 'realtime':
