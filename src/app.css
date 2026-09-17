@@ -8,14 +8,38 @@
  */
 
 /*
- * Self-hosted fonts, identical to the Flutter bundle (assets/fonts): the
- * CJK UI face plus the colour-emoji fallback. Local files only — no CDN /
- * gstatic fetch, and the same glyph metrics as the other three clients.
+ * Self-hosted fonts, byte-identical to the Flutter bundle (assets/fonts):
+ * the CJK UI face, the monospace face and the colour-emoji fallback. Local
+ * files only — no CDN / gstatic fetch, and the same glyph metrics as the
+ * other three clients.
+ *
+ * Both faces are STATIC 400/600 instances produced by tools/gen-fonts.py:
+ * the variable Noto Sans SC defaults to Thin(100) and the other engines
+ * select variable instances differently, so a 100..900 range would render
+ * lighter here than in Compose/SwiftUI.
  */
 @font-face {
   font-family: 'NotoSansSC';
-  src: url('/NotoSansSC.ttf') format('truetype');
-  font-weight: 100 900;
+  src: url('/NotoSansSC-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NotoSansSC';
+  src: url('/NotoSansSC-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NotoSansMono';
+  src: url('/NotoSansMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'NotoSansMono';
+  src: url('/NotoSansMono-SemiBold.ttf') format('truetype');
+  font-weight: 600;
   font-display: swap;
 }
 @font-face {
@@ -114,8 +138,8 @@ html[data-theme='dark'] {
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
-  --font-sans: 'NotoSansSC', ui-sans-serif, system-ui, 'NotoColorEmoji', monospace;
-  --font-mono: ui-monospace, 'NotoSansSC', monospace;
+  --font-sans: 'NotoSansSC', 'NotoColorEmoji', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'NotoSansMono', 'NotoSansSC', ui-monospace, monospace;
 }
 
 /* AppTypography scale as utilities (micro 10 / meta 12 / body 14 / mono 12). */
