@@ -19,7 +19,7 @@
   import { Popover } from '$lib/components/ui/popover'
   import { Select } from '$lib/components/ui/select'
   import { Dialog } from '$lib/components/ui/dialog'
-  import { FileText, Image, Mic, Paperclip, Send, Square, X, ChevronLeft, LoaderCircle, RotateCcw, Download, MessageSquare } from '@lucide/svelte'
+  import { Camera, FileText, Image, Mic, Keyboard, Plus, Send, Square, X, ChevronLeft, LoaderCircle, RotateCcw, Download, MessageSquare } from '@lucide/svelte'
   import MessageBubble from '$lib/components/MessageBubble.svelte'
   import MediaAttachment from '$lib/components/MediaAttachment.svelte'
 
@@ -51,6 +51,13 @@
   let text = $state('')
   let attachments = $state<UploadedFile[]>([])
   let recording = $state(false)
+  // Voice mode (mic/keyboard toggle) + hold-to-talk elapsed label, matching
+  // flutter's `_voiceMode` / `_voiceElapsed`.
+  let voiceMode = $state(false)
+  let voiceElapsed = $state(0)
+  let voiceTimer: ReturnType<typeof setInterval> | null = null
+  // Bottom sheet for the "+" affordance (flutter `_openAttachSheet`).
+  let attachOpen = $state(false)
   let dragging = $state(false)
   let followBottom = $state(true)
 
@@ -278,16 +285,46 @@
 
   // ---- voice ----
 
-  async function toggleRecording() {
-    if (recording) {
-      const src = await recorder.stop()
-      recording = false
-      if (src) void uploadOne(src)
-    } else {
-      const ok = await recorder.start()
-      if (ok) recording = true
-      else showErrorToast(t('voicePermission'))
+  /** Hold-to-talk (flutter `_holdToTalkButton`): press starts, release uploads. */
+  async function startRecording() {
+    const ok = await recorder.start()
+    if (!ok) {
+      showErrorToast(t('voicePermission'))
+      return
     }
+    recording = true
+    voiceElapsed = 0
+    voiceTimer = setInterval(() => (voiceElapsed += 200), 200)
+  }
+
+  async function stopRecording() {
+    if (voiceTimer) { clearInterval(voiceTimer); voiceTimer = null }
+    if (!recording) return
+    const src = await recorder.stop()
+    recording = false
+    if (src) void uploadOne(src)
+    else showToast(t('voiceTooShort'))
+  }
+
+  function fmtDuration(ms: number): string {
+    const total = Math.floor(ms / 1000)
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+  }
+
+  /** Camera capture (flutter `_pickImage(ImageSource.camera)`). */
+  function takePhoto() {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.capture = 'environment'
+    input.onchange = () => {
+      for (const f of input.files ?? []) {
+        void f.arrayBuffer().then(buf =>
+          uploadOne({ name: f.name || 'photo.jpg', mimeType: f.type || guessMime(f.name), bytes: new Uint8Array(buf) }),
+        )
+      }
+    }
+    input.click()
   }
 
   // ---- settings dialog ----
@@ -441,11 +478,11 @@
       <div class="pointer-events-none absolute inset-x-0 flex justify-center">
         <button
           type="button"
-          class="pointer-events-auto max-w-[45%] truncate rounded-full border border-primary/40 bg-primary/14 px-3 py-1 text-meta text-primary hover:bg-primary/20"
+          class="pointer-events-auto min-w-24 max-w-40 truncate rounded-full bg-primary/14 px-3 py-1 text-center text-meta font-semibold text-primary"
           onclick={() => (infoOpen = true)}
           title={t('settingsTitle')}
         >
-          {session?.model || session?.id}
+          {session?.id}
         </button>
       </div>
       <div class="ml-auto">
@@ -466,6 +503,16 @@
           <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
         </div>
       {:else}
+        {#if ctrl.hasMore}
+          <div class="mb-2 flex justify-center">
+            <button
+              type="button"
+              class="rounded px-2 py-1 text-sm text-primary hover:bg-muted disabled:opacity-50"
+              disabled={ctrl.loading}
+              onclick={() => void ctrl!.loadMore()}
+            >{ctrl.loading ? t('loading') : t('loadEarlier')}</button>
+          </div>
+        {/if}
         {#each ctrl.sorted as msg (msg.id)}
           <MessageBubble
             {msg}
@@ -479,7 +526,7 @@
     </div>
 
     <!-- composer -->
-    <div class="shrink-0 border-t border-border/50 p-2">
+    <div class="shrink-0 border-t border-border/50 bg-card pt-1 pr-3 pb-0 pl-3">
       {#if attachments.length}
         <div class="mb-2 flex flex-wrap gap-1">
           {#each attachments as a (a.code + a.name)}
@@ -511,64 +558,84 @@
         </div>
       {/if}
 
-      <div class="flex items-end gap-1.5">
-        <Popover side="top" align="start">
-          {#snippet trigger()}
-            <button
-              type="button"
-              class="rounded-full p-2 text-muted-foreground outline-none hover:bg-muted data-[state=open]:bg-muted"
-              title={t('attach')}
-              aria-label={t('attach')}
-            >
-              <Paperclip class="size-[18px]" />
-            </button>
-          {/snippet}
-          <div class="w-44 py-0.5">
-            <button type="button" class="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-meta hover:bg-muted" onclick={() => pickFiles('image/*')}>
-              <Image class="size-[18px]" /> {t('chooseImage')}
-            </button>
-            <button type="button" class="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-meta hover:bg-muted" onclick={() => pickFiles('')}>
-              <FileText class="size-[18px]" /> {t('chooseFile')}
-            </button>
-          </div>
-        </Popover>
+      <div class="flex items-end gap-2">
+        <button
+          type="button"
+          class="rounded-full p-1.5 text-muted-foreground hover:bg-muted disabled:opacity-40"
+          title={voiceMode ? t('keyboardMode') : t('voiceMode')}
+          aria-label={voiceMode ? t('keyboardMode') : t('voiceMode')}
+          disabled={ctrl.sending}
+          onclick={() => (voiceMode = !voiceMode)}
+        >
+          {#if voiceMode}<Keyboard class="size-[22px]" />{:else}<Mic class="size-[22px]" />{/if}
+        </button>
 
-        <textarea
-          bind:this={taEl}
-          bind:value={text}
-          rows="1"
-          class="max-h-40 min-h-9 flex-1 resize-none rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring"
-          placeholder={t('typeMessage')}
-          onkeydown={onKeydown}
-          onpaste={onPaste}
-          oninput={e => {
-            schedulePersist()
-            const el = e.currentTarget
-            el.style.height = 'auto'
-            el.style.height = `${Math.min(el.scrollHeight, 160)}px`
-          }}
-        ></textarea>
-
-        {#if recording}
-          <button type="button" class="animate-pulse rounded-full bg-destructive p-2 text-white" title={t('stop')} aria-label={t('stop')} onclick={() => void toggleRecording()}><Square class="size-[18px]" /></button>
+        {#if voiceMode}
+          <!-- Hold to talk: press-and-hold records, release sends (flutter
+               `_holdToTalkButton`, same 42px shell as the field). -->
+          <button
+            type="button"
+            class={cn(
+              'flex min-h-[42px] flex-1 items-center justify-center rounded-md border px-3 text-body select-none',
+              recording
+                ? 'border-destructive bg-destructive/12 font-semibold text-destructive'
+                : 'border-border/60 bg-muted text-muted-foreground',
+            )}
+            onpointerdown={() => void startRecording()}
+            onpointerup={() => void stopRecording()}
+            onpointerleave={() => recording && void stopRecording()}
+          >
+            {recording ? `${t('releaseToSend')} · ${fmtDuration(voiceElapsed)}` : t('holdToTalk')}
+          </button>
         {:else}
-          <button type="button" class="rounded-full p-2 text-muted-foreground hover:bg-muted" title={t('recordVoice')} aria-label={t('recordVoice')} onclick={() => void toggleRecording()}><Mic class="size-[18px]" /></button>
+          <div class="flex min-h-[42px] flex-1 items-center rounded-md border border-border/60 bg-muted">
+            <textarea
+              bind:this={taEl}
+              bind:value={text}
+              rows="1"
+              class="max-h-40 flex-1 resize-none border-0 bg-transparent px-3 py-2.5 text-sm leading-6 outline-none placeholder:text-muted-foreground"
+              placeholder={attachments.length ? '' : t('typeMessage')}
+              onkeydown={onKeydown}
+              onpaste={onPaste}
+              oninput={e => {
+                schedulePersist()
+                const el = e.currentTarget
+                el.style.height = 'auto'
+                el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+              }}
+            ></textarea>
+          </div>
         {/if}
 
         {#if ctrl.sending}
-          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground" title={t('stop')} aria-label={t('stop')} onclick={() => ctrl!.stop()}><Square class="size-[18px]" /></button>
+          <button type="button" class="rounded-full bg-destructive p-2 text-white" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><Square class="size-5" /></button>
+        {:else if sending}
+          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground" title={t('connecting')} aria-label={t('connecting')} disabled><LoaderCircle class="size-5 animate-spin" /></button>
+        {:else if canSend()}
+          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void send()}><Send class="size-5" /></button>
         {:else}
-          <button
-            type="button"
-            class="rounded-full bg-primary p-2 text-primary-foreground disabled:opacity-40"
-            disabled={!canSend()}
-            title={t('send')}
-            aria-label={t('send')}
-            onclick={() => void send()}
-          ><Send class="size-[18px]" /></button>
+          <button type="button" class="rounded-full bg-muted p-2 text-foreground hover:bg-muted/80" title={t('attach')} aria-label={t('attach')} onclick={() => (attachOpen = true)}><Plus class="size-5" /></button>
         {/if}
       </div>
     </div>
+
+    <!-- attach bottom sheet (flutter `_openAttachSheet`) -->
+    {#if attachOpen}
+      <div class="fixed inset-0 z-[70] flex items-end bg-black/50" role="presentation" onclick={() => (attachOpen = false)}>
+        <div class="w-full rounded-t-xl border-t border-border bg-card pb-3" onclick={e => e.stopPropagation()}>
+          <div class="mx-auto mt-2 mb-1 h-1 w-10 rounded-full bg-muted-foreground/30"></div>
+          <button type="button" class="flex w-full items-center gap-4 px-4 py-3 text-left text-body hover:bg-muted" onclick={() => { attachOpen = false; takePhoto() }}>
+            <Camera class="size-[22px]" /> {t('takePhoto')}
+          </button>
+          <button type="button" class="flex w-full items-center gap-4 px-4 py-3 text-left text-body hover:bg-muted" onclick={() => { attachOpen = false; pickFiles('image/*') }}>
+            <Image class="size-[22px]" /> {t('chooseImage')}
+          </button>
+          <button type="button" class="flex w-full items-center gap-4 px-4 py-3 text-left text-body hover:bg-muted" onclick={() => { attachOpen = false; pickFiles('') }}>
+            <FileText class="size-[22px]" /> {t('chooseFile')}
+          </button>
+        </div>
+      </div>
+    {/if}
 
     <!-- drop overlay -->
     {#if dragging}

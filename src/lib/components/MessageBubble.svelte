@@ -9,7 +9,7 @@
   import { renderMarkdown } from '$lib/markdown'
   import { showToast } from '$lib/toast.svelte'
   import { cn } from '$lib/utils'
-  import { Copy, RefreshCw, Pencil, Undo2, Brain, ChevronDown, ChevronRight } from '@lucide/svelte'
+  import { Copy, RefreshCw, Pencil, Undo2, ChevronDown, ChevronRight } from '@lucide/svelte'
   import ToolPartView from './ToolPartView.svelte'
   import MediaAttachment from './MediaAttachment.svelte'
   import FileRefText from './FileRefText.svelte'
@@ -42,6 +42,7 @@
   const hasText = $derived(msg.parts.some(p => p.type === 'text' || p.type === 'reasoning'))
 
   let reasoningOpen = $state(false)
+  let compactionOpen = $state(false)
   let editOpen = $state(false)
   let editText = $state('')
   let undoOpen = $state(false)
@@ -70,7 +71,7 @@
     const mins = Math.floor((now.getTime() - d.getTime()) / 60000)
     const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
     if (mins < 1) return t('timeJustNow')
-    if (mins < 60) return t('timeMinAgo', { n: mins })
+    if (mins < 60) return t('timeMinAgo', { arg1: mins })
     if (d.toDateString() === now.toDateString()) return hm
     return `${d.getMonth() + 1}/${d.getDate()} ${hm}`
   }
@@ -86,7 +87,7 @@
   <div class={cn('mb-3 flex flex-col', isSystem ? 'items-center' : isUser ? 'items-end' : 'items-start')}>
     <div
       class={cn(
-        'max-w-[92%] rounded-md border px-3 py-2.5',
+        'rounded-md border px-3 py-2.5',
         isError && 'border-destructive/40 bg-destructive/10',
         isSystem && 'border-muted-foreground/25 bg-muted/30',
         isUser && !isError && !isSystem && 'border-primary/40 bg-primary/12',
@@ -104,21 +105,19 @@
             {@const a = { api, code: part.code ?? '', name: part.name ?? '', mime: part.mime, size: part.size ?? null }}
             <MediaAttachment {...a} />
           {:else if part.type === 'reasoning'}
-            <div class="w-full rounded-sm border border-border/40 bg-muted/20">
+            <!-- flutter `_ReasoningBlock`: amber LEFT border, warning tint,
+                 right-only radius, auto-expanded while streaming. -->
+            <div class="w-full rounded-r-sm border-l-2 border-l-warning bg-warning/5 py-1 pr-2 pl-3">
               <button
                 type="button"
-                class="flex w-full items-center gap-1.5 px-2 py-1 text-micro text-muted-foreground"
+                class="flex w-full items-center gap-1.5 text-left text-micro font-semibold text-warning"
                 onclick={() => (reasoningOpen = !reasoningOpen)}
               >
-                <Brain class="size-3.5" />
+                {#if reasoningOpen}<ChevronDown class="size-3.5" />{:else}<ChevronRight class="size-3.5" />{/if}
                 <span>{t('thinkLabel')}{isStreaming ? '…' : ''}</span>
-                {#if isStreaming}
-                  <span class="size-2 animate-pulse rounded-full bg-warning"></span>
-                {/if}
-                <span class="ml-auto">{#if reasoningOpen}<ChevronDown class="size-3" />{:else}<ChevronRight class="size-3" />{/if}</span>
               </button>
-              {#if reasoningOpen}
-                <div class="md-body px-2 pb-2 text-muted-foreground">{@html renderMarkdown(part.text)}</div>
+              {#if reasoningOpen || isStreaming}
+                <div class="md-body pt-1 text-muted-foreground">{@html renderMarkdown(part.text)}</div>
               {/if}
             </div>
           {:else if part.type === 'tool' && part.state}
@@ -126,10 +125,17 @@
               <ToolPartView {part} {isStreaming} {api} />
             </div>
           {:else if part.type === 'compaction'}
-            <div class="w-full rounded-sm border border-border/40 bg-muted/20 px-2 py-1.5 text-micro text-muted-foreground">
-              <span class="font-semibold">{t('compactedLabel')}</span>
-              {#if part.text}
-                <span class="opacity-80"> · {part.text.slice(0, 120)}{part.text.length > 120 ? '…' : ''}</span>
+            <div class="w-full rounded-sm border border-border/50 bg-muted/40 px-3 py-2">
+              <button
+                type="button"
+                class="flex w-full items-center gap-1.5 text-left text-micro text-muted-foreground"
+                onclick={() => (compactionOpen = !compactionOpen)}
+              >
+                {#if compactionOpen}<ChevronDown class="size-3.5" />{:else}<ChevronRight class="size-3.5" />{/if}
+                <span>{t('compactedLabel')}</span>
+              </button>
+              {#if compactionOpen}
+                <div class="pt-1 text-meta text-muted-foreground">{part.text}</div>
               {/if}
             </div>
           {/if}
