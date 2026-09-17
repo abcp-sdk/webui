@@ -99,7 +99,7 @@
     </nav>
   {/if}
 
-  <main class="flex min-h-0 min-w-0 flex-1 pb-16 sm:pb-0">
+  <main class={cn('flex min-h-0 min-w-0 flex-1', isCompact && !hideBottomBar && 'pb-[60px]')}>
     {#each panes as p, i (p.page.key)}
       <div class="flex min-h-0 min-w-0 flex-1 {i > 0 ? 'border-l border-border' : ''}">
         <p.C
@@ -120,7 +120,7 @@
   </main>
 
   {#if isCompact && !hideBottomBar}
-    <nav class="fixed inset-x-0 bottom-0 z-30 flex h-16 border-t border-border bg-card">
+    <nav class="fixed inset-x-0 bottom-0 z-30 flex h-[60px] border-t border-border bg-card">
       {#each tabs as tb (tb.id)}
         <button
           type="button"

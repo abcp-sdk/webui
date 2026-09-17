@@ -63,6 +63,13 @@
     })
   }
 
+  /** A knob counts as configured only when its value is non-empty (an
+   *  explicitly unset knob is stored as '' and must read as "needs config"). */
+  function hasAnyConfig(tl: ToolInfo): boolean {
+    const vals = toolConfigValues(tl.name)
+    return Object.values(vals).some(v => v != null && String(v) !== '')
+  }
+
   /** Registered models of [capability] as `provider_id/model_id` refs. */
   function modelRefs(capability: string): string[] {
     const out: string[] = []
@@ -82,6 +89,8 @@
 
   async function saveExtConfig(tl: ToolInfo, knob: ToolConfig, value: string) {
     try {
+      // Empty means UNSET (there is no delete RPC): the store clears the knob
+      // to its declared zero value; the picker then renders 无.
       await store.api.setToolConfigValue(tl.name, knob.name, value)
       // refresh local view
       const vals = { ...toolConfigValues(tl.name) }
@@ -113,7 +122,7 @@
       {#each list as tl (tl.name)}
         {@const knobs = tl.config ?? []}
         {@const vals = toolConfigValues(tl.name)}
-        {@const hasConfig = Object.keys(vals).length > 0}
+        {@const hasConfig = hasAnyConfig(tl)}
         {@const req = requiredMissing(tl)}
         <div class="mb-2 rounded-md border border-border bg-card">
           <button

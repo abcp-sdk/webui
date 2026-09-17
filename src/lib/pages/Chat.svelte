@@ -526,7 +526,7 @@
     </div>
 
     <!-- composer -->
-    <div class="shrink-0 border-t border-border/50 bg-card pt-[3px] pr-3 pb-0 pl-3">
+    <div class="shrink-0 border-t border-border/50 bg-card px-3 pt-1 pb-1">
       {#if attachments.length}
         <div class="mb-2 flex flex-wrap gap-1 pt-1">
           {#each attachments as a (a.code + a.name)}
