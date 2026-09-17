@@ -2,6 +2,7 @@
 // (Drafts + read watermarks ALSO mirror into sqlite; this file holds the
 // connection, appearance, locale and backend-list state.)
 import { backendNameFor, type BackendCfg } from './models'
+import { scopeOf } from './scope'
 
 const K_BASE = 'agent.baseUrl'
 const K_TOKEN = 'agent.token'
@@ -9,6 +10,9 @@ const K_DARK = 'agent.darkMode'
 const K_AGENT_LOCALE = 'agent.agentLocale'
 const K_READ = 'agent.readSeqs'
 const K_BACKENDS = 'agent.backends'
+
+/// The scope the in-memory read watermarks belong to ('' before load).
+let readScope = ''
 
 export interface PrefsSnapshot {
   baseUrl: string | null
@@ -51,18 +55,24 @@ export const Prefs = {
   },
 
   // ---- read watermarks (localStorage mirror; sqlite is authoritative) ----
+  // Keyed per CONNECTION SCOPE (gateway + token): two users / two tenants on
+  // the same device must not share unread state.
 
-  loadReadWatermarks(): Record<string, number> {
+  loadReadWatermarks(baseUrl: string, token: string): Record<string, number> {
+    const scope = baseUrl && token ? scopeOf(baseUrl, token) : ''
+    readScope = scope
+    if (!scope) return {}
     try {
-      return JSON.parse(localStorage.getItem(K_READ) || '{}')
+      return JSON.parse(localStorage.getItem(`${K_READ}.${scope}`) || '{}')
     } catch {
       return {}
     }
   },
 
   saveReadSeqs(seqs: Record<string, number>) {
+    if (!readScope) return
     try {
-      localStorage.setItem(K_READ, JSON.stringify(seqs))
+      localStorage.setItem(`${K_READ}.${readScope}`, JSON.stringify(seqs))
     } catch {
       /* ignore quota */
     }
@@ -84,14 +94,16 @@ export const Prefs = {
     }
   },
 
+  // One gateway host may serve several tenants, so a saved user is identified
+  // by the FULL connection (baseUrl + token), not the host alone.
   upsertBackend(b: BackendCfg) {
-    const list = Prefs.backends().filter(x => x.baseUrl !== b.baseUrl)
+    const list = Prefs.backends().filter(x => !(x.baseUrl === b.baseUrl && x.token === b.token))
     list.unshift(b)
     localStorage.setItem(K_BACKENDS, JSON.stringify(list))
   },
 
-  removeBackend(baseUrl: string) {
-    const list = Prefs.backends().filter(x => x.baseUrl !== baseUrl)
+  removeBackend(b: BackendCfg) {
+    const list = Prefs.backends().filter(x => !(x.baseUrl === b.baseUrl && x.token === b.token))
     localStorage.setItem(K_BACKENDS, JSON.stringify(list))
   },
 }

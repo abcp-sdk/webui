@@ -27,7 +27,7 @@
   })
 
   async function remove(b: BackendCfg) {
-    Prefs.removeBackend(b.baseUrl)
+    Prefs.removeBackend(b)
     backends = Prefs.backends()
     showToast(t('saved'))
   }

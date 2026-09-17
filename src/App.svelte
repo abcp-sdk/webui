@@ -7,6 +7,7 @@
   import { setLocale, t } from './lib/i18n.svelte'
   import { Prefs } from './lib/prefs'
   import { openLocalStore } from './lib/db'
+  import { scopeOf } from './lib/scope'
   import type { LocalStore } from './lib/db'
   import { AppStore } from './lib/store.svelte'
   import { showErrorToast } from './lib/toast.svelte'
@@ -105,7 +106,7 @@
   async function buildStore(): Promise<AppStore> {
     const api = await AgentApi.create(baseUrl, token)
     try {
-      local = await openLocalStore()
+      local = await openLocalStore(scopeOf(baseUrl, token))
     } catch {
       local = null
     }
@@ -155,7 +156,7 @@
   }
 
   async function deleteBackend(b: BackendCfg) {
-    Prefs.removeBackend(b.baseUrl)
+    Prefs.removeBackend(b)
     backends = Prefs.backends()
   }
 

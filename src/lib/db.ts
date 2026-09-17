@@ -6,24 +6,34 @@
 import sqlite3InitModule, { type Database, type SqlValue } from '@sqlite.org/sqlite-wasm'
 import type { ChatDraft, ChatMessage, ChatPart, Message, MessagePart, Session, UploadedFile } from './models'
 
-const DB_NAME = 'agent-webui.sqlite3'
+// One sqlite file per CONNECTION SCOPE (gateway + token): a different
+// user/tenant must never read another's sessions, drafts or unread watermarks.
+const DB_NAME_PREFIX = 'agent-webui-'
 
 let dbPromise: Promise<LocalStore> | null = null
 
-export async function openLocalStore(): Promise<LocalStore> {
-  if (!dbPromise) dbPromise = _open().catch(e => {
-    dbPromise = null
+let dbScope: string | null = null
+
+export async function openLocalStore(scope: string): Promise<LocalStore> {
+  if (dbPromise && dbScope === scope) return dbPromise
+  dbScope = scope
+  const p = _open(scope).catch(e => {
+    if (dbPromise === p) {
+      dbPromise = null
+      dbScope = null
+    }
     throw e
   })
-  return dbPromise
+  dbPromise = p
+  return p
 }
 
-async function _open(): Promise<LocalStore> {
+async function _open(scope: string): Promise<LocalStore> {
   const sqlite3 = await sqlite3InitModule()
   let db: Database
   try {
     if (sqlite3.oo1.OpfsDb) {
-      db = new sqlite3.oo1.OpfsDb(DB_NAME)
+      db = new sqlite3.oo1.OpfsDb(`${DB_NAME_PREFIX}${scope}.sqlite3`)
     } else {
       db = new sqlite3.oo1.DB(':memory:', 'c')
       console.warn('[db] OPFS unavailable — using in-memory sqlite (no persistence)')
