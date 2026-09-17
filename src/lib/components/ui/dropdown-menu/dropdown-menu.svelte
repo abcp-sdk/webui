@@ -28,7 +28,7 @@
     {#if trigger}
       {@render trigger()}
     {:else}
-      <AppIcons.more class="size-4" />
+      <AppIcons.more_vertical class="size-4" />
     {/if}
   </DropdownMenuPrimitive.Trigger>
   <DropdownMenuPrimitive.Portal>

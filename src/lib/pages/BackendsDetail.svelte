@@ -40,7 +40,7 @@
   <div class="space-y-2">
     {#each backends as b (b.baseUrl)}
       <div class="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
-        {#if activeBase === b.baseUrl}<AppIcons.target class="size-4 shrink-0 text-primary" />{:else}<AppIcons.apps class="size-4 shrink-0 text-muted-foreground" />{/if}
+        {#if activeBase === b.baseUrl}<AppIcons.target class="size-4 shrink-0 text-primary" />{:else}<AppIcons.server class="size-4 shrink-0 text-muted-foreground" />{/if}
         <span class="min-w-0 flex-1">
           <span class="block truncate text-body">{b.name || b.baseUrl}</span>
           <span class="block truncate text-micro text-muted-foreground">{b.baseUrl}</span>

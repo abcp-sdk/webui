@@ -469,7 +469,7 @@
     <!-- top bar -->
     <header class="relative flex h-12 shrink-0 items-center border-b border-border/50 px-1">
       <div class="flex min-w-0 items-center gap-2">
-        <button type="button" class="rounded p-1.5 hover:bg-muted" aria-label="back" onclick={() => store.popPage()}><AppIcons.chevron_left class="size-[18px]" /></button>
+        <button type="button" class="rounded p-1.5 hover:bg-muted" aria-label="back" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
         <span class={cn('size-2 rounded-full', ctrl.sending ? 'bg-warning' : 'bg-success')}></span>
         {#if ctxLabel}
           <span class="text-micro text-muted-foreground tabular-nums">{ctxLabel}</span>
@@ -551,7 +551,7 @@
                 onclick={() => (a.uploadState === 'error' ? void retryUpload(a) : removeAttachment(a))}
                 title={a.uploadState === 'error' ? t('retry') : t('delete')}
               >
-                {#if a.uploadState === 'uploading'}<AppIcons.spinner class="size-2.5 animate-spin" />{:else if a.uploadState === 'error'}<AppIcons.revert class="size-2.5" />{:else}<AppIcons.close class="size-2.5" />{/if}
+                {#if a.uploadState === 'uploading'}<span class="block size-2.5 animate-spin rounded-full border border-white/40 border-t-white"></span>{:else if a.uploadState === 'error'}<AppIcons.refresh class="size-2.5" />{:else}<AppIcons.close class="size-2.5" />{/if}
               </button>
             </div>
           {/each}
@@ -610,7 +610,7 @@
         {#if ctrl.sending}
           <button type="button" class="rounded-full bg-destructive p-2 text-white" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><AppIcons.stop class="size-5" /></button>
         {:else if sending}
-          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground" title={t('connecting')} aria-label={t('connecting')} disabled><AppIcons.spinner class="size-5 animate-spin" /></button>
+          <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground"></span></button>
         {:else if canSend()}
           <button type="button" class="rounded-full bg-primary p-2 text-primary-foreground disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void send()}><AppIcons.send class="size-5" /></button>
         {:else}
@@ -631,7 +631,7 @@
             <AppIcons.image class="size-[22px]" /> {t('chooseImage')}
           </button>
           <button type="button" class="flex w-full items-center gap-4 px-4 py-3 text-left text-body hover:bg-muted" onclick={() => { attachOpen = false; pickFiles('') }}>
-            <AppIcons.file class="size-[22px]" /> {t('chooseFile')}
+            <AppIcons.attach class="size-[22px]" /> {t('chooseFile')}
           </button>
         </div>
       </div>

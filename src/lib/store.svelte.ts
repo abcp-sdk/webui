@@ -92,7 +92,10 @@ export class AppStore {
     const l = this.local
     if (!l) return
     try {
-      this.readSeqs = await l.loadReadSeqs()
+      // MERGE (never clobber): the stream's first snapshot can land before this
+      // read resolves, and that snapshot seeds read watermarks — overriding the
+      // in-memory map with the older DB copy would flash every row as unread.
+      this.readSeqs = { ...(await l.loadReadSeqs()), ...this.readSeqs }
       this.chatDrafts = await l.loadDrafts()
     } catch {
       /* network-only fallback */
@@ -134,7 +137,12 @@ export class AppStore {
       if (this.firstSnapshot) {
         this.firstSnapshot = false
         for (const s of this.sessions) {
-          if (!(s.id in this.readSeqs)) this.readSeqs[s.id] = s.messageSeq
+          if (!(s.id in this.readSeqs)) {
+            this.readSeqs[s.id] = s.messageSeq
+            // Mirror to the local DB: a cold start whose DB read loses the race
+            // must not repopulate from an empty table and flash unread again.
+            void this.local?.setReadSeq(s.id, s.messageSeq)
+          }
         }
         Prefs.saveReadSeqs(this.readSeqs)
       }

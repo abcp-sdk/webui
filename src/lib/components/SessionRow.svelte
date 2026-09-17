@@ -85,7 +85,7 @@
       )}
     >
       {#if selected}
-        <AppIcons.check class="size-4" />
+        <AppIcons.success class="size-4" />
       {:else}
         <span class="size-4 rounded-full border border-muted-foreground/50"></span>
       {/if}

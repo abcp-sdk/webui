@@ -103,7 +103,7 @@
             store.endProviderDraft()
             store.popPage()
           }}
-        >←</button>
+        ><AppIcons.back class="size-[18px]" /></button>
       {/if}
       <span class="text-sm font-semibold">{t('gatewayTitle')}</span>
     </header>

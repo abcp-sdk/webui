@@ -9,6 +9,7 @@
   import { getLocale } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { cn } from '$lib/utils'
+  import { AppIcons } from '$lib/icons'
 
   let { store, showBack = false }: PageProps = $props()
 
@@ -62,7 +63,7 @@
 <div class="flex h-full w-full flex-col">
   <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
     {#if showBack}
-      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}>←</button>
+      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
     {/if}
     <span class="text-sm font-semibold">{t('newPreset')}</span>
     <button type="button" class="ml-auto text-sm text-primary disabled:opacity-40" disabled={!canSave} onclick={() => void save()}>{t('save')}</button>

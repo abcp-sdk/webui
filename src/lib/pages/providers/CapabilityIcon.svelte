@@ -10,9 +10,9 @@
       case 'image': return AppIcons.image
       case 'video': return AppIcons.video
       case 'speech': return AppIcons.audio
-      case 'transcription': return AppIcons.mic
-      case 'embedding': return AppIcons.asterisk
-      case 'reranking': return AppIcons.layers
+      case 'transcription': return AppIcons.mic_vocal
+      case 'embedding': return AppIcons.scatter
+      case 'reranking': return AppIcons.grip
       case 'realtime': return AppIcons.bolt
       default: return AppIcons.chat
     }

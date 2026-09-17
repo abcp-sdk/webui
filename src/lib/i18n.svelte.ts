@@ -768,7 +768,7 @@ export type Key = keyof typeof en
 
 const dicts: Record<Locale, Record<string, string>> = { en, zh }
 
-let current = $state<Locale>('en')
+let current = $state<Locale>('zh')
 
 export function setLocale(l: Locale) {
   current = l

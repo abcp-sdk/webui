@@ -183,7 +183,7 @@
           q = ''
           searching = false
         }}
-      >←</button>
+      ><AppIcons.back class="size-[18px]" /></button>
       <input
         bind:value={q}
         class="h-9 min-w-0 flex-1 bg-transparent px-2 text-sm outline-none"

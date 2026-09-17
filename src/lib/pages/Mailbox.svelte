@@ -5,6 +5,7 @@
   import { t } from '$lib/i18n.svelte'
   import type { MailboxEntry } from '$lib/models'
   import { onMount } from 'svelte'
+  import { AppIcons } from '$lib/icons'
 
   let { store }: PageProps = $props()
 
@@ -38,7 +39,7 @@
 
 <div class="flex h-full w-full flex-col">
   <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
-    <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}>←</button>
+    <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
     <span class="text-sm font-semibold">{t('mailbox')}</span>
   </header>
   <div class="min-h-0 flex-1 overflow-y-auto p-4">

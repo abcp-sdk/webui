@@ -112,7 +112,7 @@
             {#if p.isSystem}
               <span class="rounded-full bg-muted px-1.5 py-px text-[10px] text-muted-foreground">system</span>
             {/if}
-            <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('edit')} onclick={() => beginEdit(p)}>✎</button>
+            <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('edit')} onclick={() => beginEdit(p)}><AppIcons.edit class="size-4" /></button>
             {#if !p.isSystem}
               <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('delete')} onclick={() => void remove(p)}><AppIcons.delete class="size-4" /></button>
             {/if}

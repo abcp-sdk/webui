@@ -79,35 +79,11 @@
     }
   })
 
-  /** Tool-kind glyph + tint (flutter `ToolIcon`). */
-  function toolGlyph(name: string) {
-    const n = name.toLowerCase()
-    if (n.includes('sandbox-run') || n.includes('shell') || n.includes('exec')) return { Icon: AppIcons.terminal, cls: 'text-warning' }
-    if (n.includes('read') || n.includes('write') || n.includes('edit'))
-      return { Icon: n.includes('write') ? AppIcons.file_edit : AppIcons.file, cls: 'text-primary' }
-    if (n.includes('grep') || n.includes('search')) return { Icon: AppIcons.file_search, cls: 'text-primary' }
-    if (n.includes('glob') || n.includes('ls') || n.includes('explore')) return { Icon: AppIcons.folder, cls: 'text-primary' }
-    if (n.includes('delete')) return { Icon: AppIcons.delete, cls: 'text-destructive' }
-    if (n.includes('git') || n.includes('change') || n.includes('diff')) return { Icon: AppIcons.code, cls: 'text-muted-foreground' }
-    if (n.includes('rebuild') || n.includes('rebase')) return { Icon: AppIcons.merge, cls: 'text-muted-foreground' }
-    if (n.includes('build') || n.includes('image') || n.includes('docker')) return { Icon: AppIcons.pkg, cls: 'text-accent' }
-    if (n.includes('deploy') || n.includes('release') || n.includes('helm')) return { Icon: AppIcons.rocket, cls: 'text-success' }
-    if (n.includes('package') || n.includes('publish') || n.includes('registry')) return { Icon: AppIcons.inbox, cls: 'text-success' }
-    if (n.includes('pull') || n.includes('download') || n.includes('fetch')) return { Icon: AppIcons.download, cls: 'text-accent' }
-    if (n.includes('web') || n.includes('browser') || n.includes('navigate') || n.includes('click') || n.includes('type') || n.includes('snapshot'))
-      return { Icon: AppIcons.globe, cls: 'text-accent' }
-    if (n.includes('todo') || n.includes('job') || n.includes('task')) return { Icon: AppIcons.list, cls: 'text-accent' }
-    if (n.includes('history') || n.includes('memory') || n.includes('file_info')) return { Icon: AppIcons.history, cls: 'text-accent' }
-    if (n.includes('image_read') || n.includes('image')) return { Icon: AppIcons.image, cls: 'text-accent' }
-    return { Icon: AppIcons.tools, cls: 'text-muted-foreground' }
-  }
-
   /** flutter `toolDisplayName`: `todowrite` shows as `todo`. */
   function toolDisplayName(name: string): string {
     return name === 'todowrite' ? 'todo' : name
   }
 
-  const glyph = $derived(toolGlyph(tool))
 
   function prettyJson(o: unknown): string {
     try {
@@ -124,7 +100,7 @@
     hasError ? 'bg-destructive/5' : 'bg-muted/35',
   )}
 >
-  <!-- header: status icon → tool glyph → name → italic title → chevron -->
+  <!-- header: status icon → ONE fixed glyph → name → italic title → chevron -->
   <button
     type="button"
     class="flex w-full items-center gap-1 px-2 py-1 text-left"
@@ -137,7 +113,7 @@
     {:else}
       <AppIcons.success class="size-3.5 shrink-0 text-success" />
     {/if}
-    <glyph.Icon class={cn('size-3.5 shrink-0', glyph.cls)} />
+    <AppIcons.tools class="size-3.5 shrink-0 text-primary" />
     <span class="min-w-0 truncate font-semibold text-muted-foreground">{toolDisplayName(tool || toolState?.title || 'tool')}</span>
     {#if toolState?.title}
       <span class="min-w-0 flex-1 truncate text-micro text-muted-foreground italic">{toolState.title}</span>
@@ -172,7 +148,7 @@
         <div class="rounded-sm border border-destructive/40 bg-background/50">
           <button type="button" class="flex w-full items-center gap-1 px-2 py-1 text-micro text-destructive">
             <AppIcons.chevron_down class="size-3.5" />
-            <AppIcons.warn class="size-[13px]" />
+            <AppIcons.error class="size-[13px]" />
             <span>{t('error')}</span>
           </button>
           <pre class="max-h-52 overflow-auto px-2 pb-2 font-mono text-[11px] whitespace-pre-wrap text-destructive">{toolState?.error}</pre>

@@ -7,6 +7,7 @@
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import { MULTIMODAL_CAPABILITIES, capabilityLabelKey, GATEWAY_API_TYPE, GATEWAY_PROVIDER_ID } from './common'
   import CapabilityIcon from './CapabilityIcon.svelte'
+  import { AppIcons } from '$lib/icons'
 
   let { store, showBack = false, modelId = null }: PageProps & { modelId?: string | null } = $props()
 
@@ -86,7 +87,7 @@
   <div class="flex h-full w-full flex-col">
     <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
       {#if showBack}
-        <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}>←</button>
+        <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
       {/if}
       <span class="text-sm font-semibold">{isEdit ? t('editModel') : t('addModel')}</span>
       <button type="button" class="ml-auto text-sm text-primary disabled:opacity-40" disabled={!canSave} onclick={save}>{t('save')}</button>
@@ -130,7 +131,7 @@
           class="rounded-md border border-border px-3 py-1.5 text-meta hover:bg-muted disabled:opacity-40"
           disabled={testing || !mid.trim()}
           onclick={() => void test()}
-        >{testing ? t('connecting') : t('test')}</button>
+        ><AppIcons.flask class="mr-1 inline size-3.5" />{testing ? t('connecting') : t('test')}</button>
         {#if testOk !== null}
           <div class="mt-2 rounded-md border {testOk ? 'border-success/40 bg-success/10 text-success' : 'border-destructive/40 bg-destructive/10 text-destructive'} px-3 py-2 text-micro">
             {testMsg}

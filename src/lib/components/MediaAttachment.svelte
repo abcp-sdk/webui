@@ -31,6 +31,7 @@
   } = $props()
 
   let url = $state('')
+  let imgError = $state(false)
   let viewerOpen = $state(false)
 
   $effect(() => {
@@ -61,7 +62,11 @@
     disabled={!shown}
   >
     {#if kind === 'image' && shown}
-      <img src={shown} alt={name} class="size-full object-cover" />
+      {#if imgError}
+        <AppIcons.image_off class="m-auto size-5 text-muted-foreground" />
+      {:else}
+        <img src={shown} alt={name} class="size-full object-cover" onerror={() => (imgError = true)} />
+      {/if}
     {:else if shown && (kind === 'audio')}
       <AppIcons.music class="m-auto size-5 text-muted-foreground" />
     {:else if shown && kind === 'video'}
@@ -76,7 +81,13 @@
   <!-- inline bubble attachment -->
   <div class="flex flex-wrap gap-2">
     {#if kind === 'image' && shown}
-      <img src={shown} onclick={open} onkeydown={e => e.key === 'Enter' && open()} alt={name || code} title={name || code} class="max-h-64 cursor-zoom-in rounded-md border border-border/50" />
+      {#if imgError}
+        <span class="flex items-center gap-2 rounded-md border border-border/40 px-2.5 py-1.5 text-meta text-muted-foreground">
+          <AppIcons.image_off class="size-4" /> {name || code}
+        </span>
+      {:else}
+        <img src={shown} onclick={open} onkeydown={e => e.key === 'Enter' && open()} onerror={() => (imgError = true)} alt={name || code} title={name || code} class="max-h-64 cursor-zoom-in rounded-md border border-border/50" />
+      {/if}
     {:else if kind === 'video' && shown}
       <video src={shown} controls class="max-h-72 rounded-md border border-border/50"><track kind="captions" /></video>
     {:else if kind === 'audio' && shown}

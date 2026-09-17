@@ -108,7 +108,7 @@
 <div class="flex h-full w-full flex-col">
   <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
     {#if showBack}
-      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}>←</button>
+      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
     {/if}
     <span class="text-sm font-semibold">{t('llmProviders')}</span>
     <button type="button" class="ml-auto rounded p-1.5 text-primary hover:bg-muted" title={t('addProvider')} onclick={addText}><AppIcons.add class="size-[18px]" /></button>
@@ -128,7 +128,7 @@
         class="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted"
         onclick={() => (pickOpen = true)}
       >
-        <span class="w-5 text-center text-primary">★</span>
+        <AppIcons.star class="size-5 shrink-0 text-primary" />
         <span class="min-w-0 flex-1">
           <span class="block text-body font-medium">{t('defaultModel')}</span>
           <span class="block truncate text-micro text-muted-foreground">{defaultModel || t('none')}</span>
@@ -146,9 +146,9 @@
           onclick={() => (isGatewayProvider(p.apiType) ? editGateway(p) : edit(p))}
         >
           {#if isGatewayProvider(p.apiType)}
-            <span class="w-5 shrink-0 text-center text-success">◎</span>
+            <AppIcons.network class="size-5 shrink-0 text-success" />
           {:else}
-            <AppIcons.apps class="size-5 shrink-0 text-primary" />
+            <AppIcons.server class="size-5 shrink-0 text-primary" />
           {/if}
           <span class="min-w-0 flex-1">
             <span class="block text-body font-medium">{p.providerId}</span>

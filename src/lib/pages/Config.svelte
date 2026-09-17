@@ -90,7 +90,7 @@
       },
     ]
     const llm: Row[] = [
-      { icon: AppIcons.apps, label: t('llmProviders'), onTap: () => store.pushSibling({ kind: 'providers_list', key: 'providers_list' }) },
+      { icon: AppIcons.server, label: t('llmProviders'), onTap: () => store.pushSibling({ kind: 'providers_list', key: 'providers_list' }) },
       { icon: AppIcons.sparkles, label: t('presets'), onTap: () => store.pushSibling({ kind: 'config_sub', key: 'config_sub_presets', id: 'presets' }) },
     ]
     const workspace: Row[] = [
@@ -113,7 +113,7 @@
 <div class="flex h-full w-full flex-col">
   <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
     {#if isDetail && showBack}
-      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}>←</button>
+      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
     {/if}
     <span class="text-sm font-semibold">{titleOf(initialId)}</span>
     {#if isDetail && initialId === 'presets'}

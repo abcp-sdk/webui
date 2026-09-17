@@ -40,7 +40,7 @@
   let backends = $state<BackendCfg[]>([])
 
   const savedLocale = localStorage.getItem('agent.uiLocale')
-  setLocale((savedLocale as 'zh' | 'en') || (navigator.language.startsWith('zh') ? 'zh' : 'en'))
+  setLocale((savedLocale as 'zh' | 'en') || 'zh')
 
   function applyDark(d: boolean) {
     dark = d
@@ -184,7 +184,7 @@
 {:else if phase === 'backends'}
   <div class="flex h-full flex-col">
     <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
-      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => phase = token ? 'app' : 'setup'}>←</button>
+      <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => phase = token ? 'app' : 'setup'}><AppIcons.back class="size-[18px]" /></button>
       <span class="text-sm font-semibold">{t('backendsTitle')}</span>
     </header>
     <div class="flex-1 overflow-y-auto p-4">
@@ -194,7 +194,7 @@
       <div class="space-y-2">
         {#each backends as b (b.baseUrl)}
           <div class="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
-            {#if b.baseUrl === baseUrl}<AppIcons.target class="size-4 text-primary" />{:else}<AppIcons.apps class="size-4 text-muted-foreground" />{/if}
+            {#if b.baseUrl === baseUrl}<AppIcons.target class="size-4 text-primary" />{:else}<AppIcons.server class="size-4 text-muted-foreground" />{/if}
             <span class="min-w-0 flex-1">
               <span class="block truncate text-body">{b.name || b.baseUrl}</span>
               <span class="block truncate text-micro text-muted-foreground">{b.baseUrl}</span>
