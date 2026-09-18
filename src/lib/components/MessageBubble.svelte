@@ -11,6 +11,7 @@
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
   import { Dialog } from '$lib/components/ui/dialog'
+  import { actionSheet } from '$lib/overlays.svelte'
   import ToolPartView from './ToolPartView.svelte'
   import MediaAttachment from './MediaAttachment.svelte'
   import FileRefText from './FileRefText.svelte'
@@ -78,6 +79,70 @@
     return `${d.getMonth() + 1}/${d.getDate()} ${hm}`
   }
 
+  // ---- bubble menu: long-press (touch) / right-click (mouse) ----
+  //
+  // Mirrors flutter `GestureDetector(onLongPress: _actions)` + Compose
+  // `bubbleMenuGestures`: LONG-PRESS on the bubble chrome opens the action
+  // sheet, but a press ON TEXT is left to native selection. We detect "on
+  // text" by checking whether the press landed inside a text-bearing element —
+  // the browser's own selection then handles it.
+  let pressTimer: ReturnType<typeof setTimeout> | null = null
+  let pressStartedInText = false
+
+  function inSelectableText(target: EventTarget | null): boolean {
+    if (!(target instanceof Element)) return false
+    // genui markdown, code, or any element that opted into text selection.
+    return !!target.closest('p, h1, h2, h3, h4, h5, h6, li, code, pre, a, .md-body')
+  }
+
+  function menuAvailable(): boolean {
+    if (isStreaming) return false
+    if (msg.role === 'system' || msg.role === 'event') return false
+    return true
+  }
+
+  function cancelPress() {
+    if (pressTimer) {
+      clearTimeout(pressTimer)
+      pressTimer = null
+    }
+  }
+
+  async function openActions() {
+    const opts: { value: string; label: string; destructive?: boolean }[] = []
+    if (hasText) opts.push({ value: 'copy', label: t('copy') })
+    if (isUser && onResend) opts.push({ value: 'retry', label: t('retry') })
+    if (isUser && onEdit) opts.push({ value: 'edit', label: t('edit') })
+    opts.push({ value: 'undo', label: t('undo') })
+    const choice = await actionSheet({
+      title: hasText ? (msg.parts.find(p => p.type === 'text')?.text ?? '').slice(0, 60) : '',
+      actions: opts,
+    })
+    if (choice === 'copy') copy()
+    else if (choice === 'retry') retryOpen = true
+    else if (choice === 'edit') beginEdit()
+    else if (choice === 'undo') undoOpen = true
+  }
+
+  function onPointerDown(e: PointerEvent) {
+    if (!menuAvailable()) return
+    pressStartedInText = inSelectableText(e.target)
+    cancelPress()
+    // Touch/pen: a long press opens the menu unless it started on text.
+    if (e.pointerType !== 'mouse') {
+      pressTimer = setTimeout(() => {
+        pressTimer = null
+        if (!pressStartedInText) void openActions()
+      }, 500)
+    }
+  }
+
+  function onContextMenu(e: MouseEvent) {
+    if (!menuAvailable()) return
+    e.preventDefault()
+    void openActions()
+  }
+
 </script>
 
 {#if isStreaming && ordered.length === 0}
@@ -87,6 +152,7 @@
   </div>
 {:else}
   <div class={cn('mb-3 flex flex-col', isSystem ? 'items-center' : isUser ? 'items-end' : 'items-start')}>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class={cn(
         'rounded-md border px-3 py-2.5',
@@ -95,6 +161,12 @@
         isUser && !isError && !isSystem && 'border-primary/40 bg-primary/12',
         !isUser && !isError && !isSystem && 'border-border/50 bg-card',
       )}
+      onpointerdown={onPointerDown}
+      onpointerup={cancelPress}
+      onpointercancel={cancelPress}
+      onpointerleave={cancelPress}
+      onpointermove={() => pressTimer && cancelPress()}
+      oncontextmenu={onContextMenu}
     >
       <div class="flex flex-col items-start gap-2 text-left">
         {#if isError}
