@@ -10,8 +10,39 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>ABCP Agent</title>
+    <style>
+      /* Pre-boot splash: shown until Svelte mounts (removed in main.ts). Mirrors
+         src/lib/components/LoadingScreen.svelte and the other clients: client
+         MARK + "ABCP Agent" + a ring. WebUI mark is AW / violet #7c3aed. */
+      html, body { margin: 0; height: 100%; background: #ffffff; }
+      @media (prefers-color-scheme: dark) { html, body { background: #0a0a0a; } }
+      #agent-splash {
+        position: fixed; inset: 0; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 16px;
+        color: #1a1a1a; font-family: system-ui, -apple-system, 'Noto Sans SC', sans-serif;
+      }
+      @media (prefers-color-scheme: dark) { #agent-splash { color: #eeeeee; } }
+      #agent-splash .mk {
+        width: 40px; height: 40px; border-radius: 10px; background: #7c3aed;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-weight: 600; font-size: 16px;
+        font-family: ui-monospace, 'Noto Sans Mono', monospace;
+      }
+      #agent-splash .ti { font-size: 14px; }
+      #agent-splash .rg {
+        width: 24px; height: 24px; border-radius: 50%;
+        border: 2px solid currentColor; border-top-color: transparent;
+        opacity: .55; animation: agent-spin .8s linear infinite;
+      }
+      @keyframes agent-spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
+    <div id="agent-splash">
+      <div class="mk">AW</div>
+      <div class="ti">ABCP Agent</div>
+      <div class="rg"></div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

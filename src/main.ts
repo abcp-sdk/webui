@@ -10,3 +10,5 @@ registerSW({ immediate: true })
 const target = document.getElementById('app')
 if (!target) throw new Error('#app element not found')
 mount(App, { target })
+// Remove the pre-boot splash (index.html) once Svelte has mounted.
+document.getElementById('agent-splash')?.remove()

@@ -17,6 +17,7 @@
   import { backendNameFor } from './lib/models'
   import Shell from './lib/Shell.svelte'
   import Overlays from './lib/components/Overlays.svelte'
+  import LoadingScreen from './lib/components/LoadingScreen.svelte'
   import { Button } from './lib/components/ui/button'
   import { Input } from './lib/components/ui/input'
   import { AppIcons } from '$lib/icons'
@@ -296,9 +297,7 @@
     </div>
   </div>
 {:else}
-  <div class="flex h-full items-center justify-center">
-    <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
-  </div>
+  <LoadingScreen />
 {/if}
 
 <Overlays />
