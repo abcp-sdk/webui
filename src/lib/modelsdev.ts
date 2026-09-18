@@ -19,7 +19,7 @@ export interface MdProvider {
 }
 
 const URL_ = 'https://models.opencode.ai/api.json'
-const CACHE_KEY = 'easylab-models-dev'
+const CACHE_KEY = 'abcp-models-dev'
 const TTL = 60 * 60 * 1000
 
 interface CacheShape {
