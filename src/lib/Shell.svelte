@@ -20,8 +20,8 @@
 
   let {
     store,
-    dark,
-    onDarkMode,
+    themeMode,
+    onThemeMode,
     onSwitchBackend,
     onBackendSwitched,
     onUiLocale,
@@ -104,8 +104,8 @@
       <div class="flex min-h-0 min-w-0 flex-1 {i > 0 ? 'border-l border-border' : ''}">
         <p.C
           {store}
-          {dark}
-          {onDarkMode}
+          {themeMode}
+          {onThemeMode}
           {onSwitchBackend}
           {onBackendSwitched}
           {onUiLocale}

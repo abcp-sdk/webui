@@ -4,8 +4,8 @@
   // the responsive two-tab shell.
   import { onMount } from 'svelte'
   import { AgentApi } from './lib/api'
-  import { setLocale, t } from './lib/i18n.svelte'
-  import { Prefs } from './lib/prefs'
+  import { setLocale, systemLocale, t } from './lib/i18n.svelte'
+  import { Prefs, type ThemeMode } from './lib/prefs'
   import { openLocalStore } from './lib/db'
   import { scopeOf } from './lib/scope'
   import type { LocalStore } from './lib/db'
@@ -26,8 +26,11 @@
   let phase = $state<Phase>('loading')
   let baseUrl = $state('')
   let token = $state('')
-  // Light is the default appearance (every client).
-  let dark = $state(false)
+  // Theme: tri-state pref (system | light | dark), DEFAULT follow-system —
+  // "system" resolves live against the OS prefers-color-scheme query.
+  let themeMode = $state<ThemeMode>('system')
+  let systemDark = $state(false)
+  const dark = $derived(themeMode === 'dark' || (themeMode === 'system' && systemDark))
   let store = $state<AppStore | null>(null)
   let local: LocalStore | null = null
 
@@ -40,18 +43,26 @@
   // backends page
   let backends = $state<BackendCfg[]>([])
 
-  const savedLocale = localStorage.getItem('agent.uiLocale')
-  setLocale((savedLocale as 'zh' | 'en') || 'zh')
+  // UI language: an explicit zh/en pref, or follow the system language (the
+  // four-client default). zh for any Chinese system locale, en otherwise.
+  const savedLocalePref = localStorage.getItem('agent.uiLocale')
+  setLocale(
+    savedLocalePref === 'zh' || savedLocalePref === 'en' ? savedLocalePref : systemLocale(),
+  )
 
-  function applyDark(d: boolean) {
-    dark = d
-    document.documentElement.dataset.theme = d ? 'dark' : 'light'
-    Prefs.saveDarkMode(d)
+  // Apply the resolved theme to <html> (the CSS custom properties flip on it).
+  $effect(() => {
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+  })
+
+  function applyThemeMode(m: ThemeMode) {
+    themeMode = m
+    Prefs.saveThemeMode(m)
   }
 
-  function setUiLocale(l: 'zh' | 'en') {
-    setLocale(l)
+  function setUiLocale(l: 'system' | 'zh' | 'en') {
     localStorage.setItem('agent.uiLocale', l)
+    setLocale(l === 'system' ? systemLocale() : l)
   }
 
   // 401/403 anywhere → one-tap "sign in again" (flutter auth_gate.dart).
@@ -67,7 +78,11 @@
   })
 
   onMount(() => {
-    applyDark(Prefs.load().darkMode)
+    themeMode = Prefs.loadThemeMode()
+    // Live system-theme tracking for the "follow system" mode.
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
+    systemDark = mq?.matches ?? false
+    mq?.addEventListener('change', e => (systemDark = e.matches))
     void boot()
   })
 
@@ -211,8 +226,8 @@
 {#if phase === 'app' && store}
   <Shell
     {store}
-    {dark}
-    onDarkMode={applyDark}
+    {themeMode}
+    onThemeMode={applyThemeMode}
     onSwitchBackend={openBackends}
     onBackendSwitched={switchBackend}
     onUiLocale={setUiLocale}

@@ -7,6 +7,7 @@
   import { t } from '$lib/i18n.svelte'
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import { loadModelsDev, npmToType, type MdProvider } from '$lib/modelsdev'
+  import { Select } from '$lib/components/ui/select'
   import CapabilityIcon from './CapabilityIcon.svelte'
   import { apiTypeLabelKey, apiTypesForCapability, capabilityLabelKey } from './common'
   import ModelRow from './ModelRow.svelte'
@@ -168,11 +169,7 @@
 
       <label class="block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('apiType')}</span>
-        <select bind:value={apiType} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring">
-          {#each availableApiTypes as ty (ty)}
-            <option value={ty}>{t(apiTypeLabelKey(ty))}</option>
-          {/each}
-        </select>
+        <Select bind:value={apiType} items={availableApiTypes.map(ty => ({ value: ty, label: t(apiTypeLabelKey(ty)) }))} />
       </label>
 
       <label class="block">

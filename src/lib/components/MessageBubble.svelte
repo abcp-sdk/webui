@@ -10,6 +10,7 @@
   import { showToast } from '$lib/toast.svelte'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
+  import { Dialog } from '$lib/components/ui/dialog'
   import ToolPartView from './ToolPartView.svelte'
   import MediaAttachment from './MediaAttachment.svelte'
   import FileRefText from './FileRefText.svelte'
@@ -46,6 +47,7 @@
   let editOpen = $state(false)
   let editText = $state('')
   let undoOpen = $state(false)
+  let retryOpen = $state(false)
 
   function textOfMessage(): string {
     return msg.parts.filter(p => p.type === 'text').map(p => p.text).join('\n')
@@ -149,7 +151,7 @@
           <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('copy')} aria-label={t('copy')} onclick={copy}><AppIcons.copy class="size-3.5" /></button>
         {/if}
         {#if isUser && onResend}
-          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('retry')} aria-label={t('retry')} onclick={() => onResend?.(textOfMessage())}><AppIcons.refresh class="size-3.5" /></button>
+          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('retry')} aria-label={t('retry')} onclick={() => (retryOpen = true)}><AppIcons.refresh class="size-3.5" /></button>
         {/if}
         {#if isUser && onEdit}
           <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('edit')} aria-label={t('edit')} onclick={beginEdit}><AppIcons.edit class="size-3.5" /></button>
@@ -164,44 +166,56 @@
 {/if}
 
 <!-- edit dialog -->
-{#if editOpen}
-  <div class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" role="presentation">
-    <div class="w-[min(92vw,520px)] rounded-lg border border-border bg-card p-4 shadow-xl">
-      <div class="mb-3 text-sm font-semibold">{t('editMessage')}</div>
-      <textarea bind:value={editText} rows="5" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"></textarea>
-      <div class="mt-3 flex justify-end gap-2">
-        <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (editOpen = false)}>{t('cancel')}</button>
-        <button
-          type="button"
-          class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80"
-          onclick={() => {
-            const v = editText.trim()
-            editOpen = false
-            if (v) onEdit?.(v)
-          }}
-        >{t('apply')}</button>
-      </div>
-    </div>
-  </div>
-{/if}
+<Dialog bind:open={editOpen} title={t('editMessage')}>
+  {#snippet children()}
+    <textarea bind:value={editText} rows="5" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"></textarea>
+  {/snippet}
+  {#snippet footer()}
+    <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (editOpen = false)}>{t('cancel')}</button>
+    <button
+      type="button"
+      class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80"
+      onclick={() => {
+        const v = editText.trim()
+        editOpen = false
+        if (v) onEdit?.(v)
+      }}
+    >{t('apply')}</button>
+  {/snippet}
+</Dialog>
+
+<!-- retry confirm: withdraws this message and everything after, then resends -->
+<Dialog bind:open={retryOpen} title={t('retryTitle')}>
+  {#snippet children()}
+    <div class="text-meta text-muted-foreground">{t('retryBody')}</div>
+  {/snippet}
+  {#snippet footer()}
+    <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (retryOpen = false)}>{t('cancel')}</button>
+    <button
+      type="button"
+      class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80"
+      onclick={() => {
+        retryOpen = false
+        onResend?.(textOfMessage())
+      }}
+    >{t('retry')}</button>
+  {/snippet}
+</Dialog>
 
 <!-- undo confirm -->
-{#if undoOpen}
-  <div class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" role="presentation">
-    <div class="w-[min(92vw,420px)] rounded-lg border border-border bg-card p-4 shadow-xl">
-      <div class="mb-2 text-sm font-semibold">{t('undoTitle')}</div>
-      <div class="text-meta text-muted-foreground">{t('undoBody')}</div>
-      <div class="mt-3 flex justify-end gap-2">
-        <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (undoOpen = false)}>{t('cancel')}</button>
-        <button
-          type="button"
-          class="rounded-md bg-destructive px-3 py-1.5 text-sm text-white hover:bg-destructive/80"
-          onclick={() => {
-            undoOpen = false
-            onUndo(msg.id)
-          }}
-        >{t('undo')}</button>
-      </div>
-    </div>
-  </div>
-{/if}
+<Dialog bind:open={undoOpen} title={t('undoTitle')}>
+  {#snippet children()}
+    <div class="text-meta text-muted-foreground">{t('undoBody')}</div>
+  {/snippet}
+  {#snippet footer()}
+    <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (undoOpen = false)}>{t('cancel')}</button>
+    <button
+      type="button"
+      class="rounded-md bg-destructive px-3 py-1.5 text-sm text-white hover:bg-destructive/80"
+      onclick={() => {
+        undoOpen = false
+        onUndo(msg.id)
+      }}
+    >{t('undo')}</button>
+  {/snippet}
+</Dialog>

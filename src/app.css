@@ -174,26 +174,6 @@ body {
   overscroll-behavior: none;
 }
 
-/* Native <select> dropdown: a short grow-in animation on open (the popup is
-   OS-drawn, so this animates the control itself — the closest web equivalent
-   of the Compose AppSelect expand animation). */
-select {
-  transition: box-shadow 160ms ease, border-color 160ms ease;
-}
-@keyframes select-pop {
-  from {
-    transform: scaleY(0.86);
-    opacity: 0.6;
-  }
-  to {
-    transform: scaleY(1);
-    opacity: 1;
-  }
-}
-select:focus {
-  animation: select-pop 160ms ease-out;
-}
-
 /* Dropdown menus (bits-ui) grow in, matching the Compose expand. */
 [data-slot='select-content'],
 [role='menu'] {

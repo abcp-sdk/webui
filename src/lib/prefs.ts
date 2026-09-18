@@ -6,10 +6,16 @@ import { scopeOf } from './scope'
 
 const K_BASE = 'agent.baseUrl'
 const K_TOKEN = 'agent.token'
-const K_DARK = 'agent.darkMode'
+// Tri-state theme pref ("system" | "light" | "dark"), default follow-system.
+// Older installs only stored the boolean agent.darkMode — it maps onto the
+// explicit light/dark modes (never back to "system": the user chose).
+const K_THEME = 'agent.themeMode'
+const K_DARK_LEGACY = 'agent.darkMode'
 const K_AGENT_LOCALE = 'agent.agentLocale'
 const K_READ = 'agent.readSeqs'
 const K_BACKENDS = 'agent.backends'
+
+export type ThemeMode = 'system' | 'light' | 'dark'
 
 /// The scope the in-memory read watermarks belong to ('' before load).
 let readScope = ''
@@ -17,7 +23,7 @@ let readScope = ''
 export interface PrefsSnapshot {
   baseUrl: string | null
   token: string | null
-  darkMode: boolean
+  themeMode: ThemeMode
 }
 
 export const Prefs = {
@@ -25,18 +31,24 @@ export const Prefs = {
     return {
       baseUrl: localStorage.getItem(K_BASE),
       token: localStorage.getItem(K_TOKEN),
-      // Light is the default appearance: only an explicit '1' enables dark.
-      darkMode: localStorage.getItem(K_DARK) === '1',
+      themeMode: Prefs.loadThemeMode(),
     }
+  },
+
+  loadThemeMode(): ThemeMode {
+    const v = localStorage.getItem(K_THEME)
+    if (v === 'system' || v === 'light' || v === 'dark') return v
+    const legacy = localStorage.getItem(K_DARK_LEGACY)
+    return legacy === '1' ? 'dark' : legacy === '0' ? 'light' : 'system'
+  },
+
+  saveThemeMode(m: ThemeMode) {
+    localStorage.setItem(K_THEME, m)
   },
 
   save(base: string, token: string) {
     localStorage.setItem(K_BASE, base)
     localStorage.setItem(K_TOKEN, token)
-  },
-
-  saveDarkMode(dark: boolean) {
-    localStorage.setItem(K_DARK, dark ? '1' : '0')
   },
 
   loadAgentLocale(): string {

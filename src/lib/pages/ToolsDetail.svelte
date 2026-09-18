@@ -9,6 +9,7 @@
   import { getLocale } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { AppIcons } from '$lib/icons'
+  import { Select } from '$lib/components/ui/select'
   import { parseToolParams } from '$lib/models'
 
   let { store }: { store: AppStore } = $props()
@@ -162,40 +163,27 @@
                   </span>
                   {#if knob.kind === 'model'}
                     <!-- Declared model reference: pick from the models
-                         registered under the knob's modality. -->
+                         registered under the knob's modality. Selecting a
+                         value SAVES immediately (webui knob policy). -->
                     <div class="flex gap-2">
-                      <select
+                      <Select
                         value={knobValue(tl, knob)}
-                        class="h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
-                        onchange={e => void saveExtConfig(tl, knob, e.currentTarget.value)}
-                      >
-                        <option value="">{t('none')}</option>
-                        {#each modelRefs(knob.capability) as ref (ref)}
-                          <option value={ref}>{ref}</option>
-                        {/each}
-                      </select>
+                        items={[{ value: '', label: t('none') }, ...modelRefs(knob.capability).map(ref => ({ value: ref, label: ref }))]}
+                        onchange={v => void saveExtConfig(tl, knob, v)}
+                      />
                     </div>
                   {:else if knob.type === 'enum' && knob.enumValues.length}
-                    <select
+                    <Select
                       value={knobValue(tl, knob)}
-                      class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
-                      onchange={e => void saveExtConfig(tl, knob, e.currentTarget.value)}
-                    >
-                      <option value=""></option>
-                      {#each knob.enumValues as ev (ev)}
-                        <option value={ev}>{ev}</option>
-                      {/each}
-                    </select>
+                      items={[{ value: '', label: t('none') }, ...knob.enumValues.map(ev => ({ value: ev, label: ev }))]}
+                      onchange={v => void saveExtConfig(tl, knob, v)}
+                    />
                   {:else if knob.type === 'boolean'}
-                    <select
+                    <Select
                       value={knobValue(tl, knob)}
-                      class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring"
-                      onchange={e => void saveExtConfig(tl, knob, e.currentTarget.value)}
-                    >
-                      <option value=""></option>
-                      <option value="true">true</option>
-                      <option value="false">false</option>
-                    </select>
+                      items={[{ value: '', label: t('none') }, { value: 'true', label: 'true' }, { value: 'false', label: 'false' }]}
+                      onchange={v => void saveExtConfig(tl, knob, v)}
+                    />
                   {:else}
                     <div class="flex gap-2">
                       <input

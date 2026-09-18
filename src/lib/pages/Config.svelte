@@ -4,12 +4,11 @@
   // (appearance / backend switch / providers / presets / tools / language) and
   // the drill-in details (appearance, backends, presets, tools).
   import type { PageProps } from '$lib/page-props'
-  import { t, getLocale, setLocale } from '$lib/i18n.svelte'
+  import { t, getLocale, setLocale, systemLocale } from '$lib/i18n.svelte'
   import { Prefs } from '$lib/prefs'
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import type { Preset, ToolInfo } from '$lib/models'
   import { parseToolParams } from '$lib/models'
-  import { Switch } from '$lib/components/ui/switch'
   import { Select } from '$lib/components/ui/select'
   import { Dialog } from '$lib/components/ui/dialog'
   import { actionSheet } from '$lib/dialogs'
@@ -20,8 +19,8 @@
 
   let {
     store,
-    dark,
-    onDarkMode,
+    themeMode,
+    onThemeMode,
     onSwitchBackend,
     onBackendSwitched,
     onAddUser,
@@ -32,6 +31,17 @@
   const isDetail = $derived(initialId != null)
   let pickLocaleOpen = $state(false)
   let pickAgentLocaleOpen = $state(false)
+  let pickThemeOpen = $state(false)
+
+  const themeOptions = $derived.by(() => [
+    ['system', t('followSystem')],
+    ['light', t('themeLight')],
+    ['dark', t('themeDark')],
+  ] as const)
+
+  function themeLabel(m: string): string {
+    return themeOptions.find(([v]) => v === m)?.[1] ?? t('followSystem')
+  }
 
   function titleOf(id?: string): string {
     switch (id) {
@@ -50,11 +60,14 @@
     }
   }
 
-  function pickLanguage(code: 'zh' | 'en') {
-    if (code !== getLocale()) {
+  function pickLanguage(code: 'system' | 'zh' | 'en') {
+    if (code !== 'system' && code !== getLocale()) {
       setLocale(code)
-      localStorage.setItem('agent.uiLocale', code)
     }
+    if (code === 'system') {
+      setLocale(systemLocale())
+    }
+    localStorage.setItem('agent.uiLocale', code)
   }
 
   async function pickAgentLocale(code: string) {
@@ -145,13 +158,18 @@
 
 {#snippet detail(id: string)}
   {#if id === 'appearance'}
-    <div class="flex items-center justify-between px-4 py-4">
-      <div>
-        <div class="text-body">{t('darkMode')}</div>
-        <div class="text-micro text-muted-foreground">{t('darkModeSub')}</div>
+    <!-- Tri-state theme (follow system / light / dark), follow-system default. -->
+    <button
+      type="button"
+      class="flex w-full items-center gap-3 px-4 py-4 text-left hover:bg-muted"
+      onclick={() => (pickThemeOpen = true)}
+    >
+      <div class="min-w-0 flex-1">
+        <div class="text-body">{t('appearance')}</div>
+        <div class="text-micro text-muted-foreground">{themeLabel(themeMode)}</div>
       </div>
-      <Switch checked={dark} onchange={v => onDarkMode?.(v)} />
-    </div>
+      <AppIcons.chevron_right class="size-4 text-muted-foreground" />
+    </button>
   {:else if id === 'backends'}
     {@render backendsDetail()}
   {:else if id === 'presets'}
@@ -175,20 +193,41 @@
   <ToolsDetail {store} />
 {/snippet}
 
-{#if pickLocaleOpen}
-  <Dialog bind:open={pickLocaleOpen} title={t('language')}>
+{#if pickThemeOpen}
+  <Dialog bind:open={pickThemeOpen} title={t('appearance')}>
     {#snippet children()}
       <div class="flex flex-col">
-        {#each [['zh', '中文'], ['en', 'English']] as [code, label] (code)}
+        {#each themeOptions as [code, label] (code)}
           <button
             type="button"
             class="flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left text-body hover:bg-muted"
             onclick={() => {
-              pickLanguage(code as 'zh' | 'en')
+              onThemeMode?.(code)
+              pickThemeOpen = false
+            }}
+          >
+            {#if themeMode === code}<AppIcons.target class="size-4 text-primary" />{:else}<span class="size-4 rounded-full border border-muted-foreground/50"></span>{/if} {label}
+          </button>
+        {/each}
+      </div>
+    {/snippet}
+  </Dialog>
+{/if}
+
+{#if pickLocaleOpen}
+  <Dialog bind:open={pickLocaleOpen} title={t('language')}>
+    {#snippet children()}
+      <div class="flex flex-col">
+        {#each [['system', t('followSystem')], ['zh', '中文'], ['en', 'English']] as [code, label] (code)}
+          <button
+            type="button"
+            class="flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-left text-body hover:bg-muted"
+            onclick={() => {
+              pickLanguage(code as 'system' | 'zh' | 'en')
               pickLocaleOpen = false
             }}
           >
-            {#if getLocale() === code}<AppIcons.target class="size-4 text-primary" />{:else}<span class="size-4 rounded-full border border-muted-foreground/50"></span>{/if} {label}
+            {#if localStorage.getItem('agent.uiLocale') === code}<AppIcons.target class="size-4 text-primary" />{:else}<span class="size-4 rounded-full border border-muted-foreground/50"></span>{/if} {label}
           </button>
         {/each}
       </div>
