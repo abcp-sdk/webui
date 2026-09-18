@@ -141,6 +141,22 @@
             <pre class="max-h-52 overflow-auto px-2 pb-2 font-mono text-[11px]">{prettyJson(input)}</pre>
           {/if}
         </div>
+      {:else if toolState?.inputText}
+        <!-- Arguments still streaming (tool-input-delta): raw JSON preview. -->
+        <div class="rounded-sm border border-border/50 bg-background/50">
+          <button
+            type="button"
+            class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
+            onclick={() => (inputOpen = !inputOpen)}
+          >
+            {#if inputOpen}<AppIcons.chevron_down class="size-3.5" />{:else}<AppIcons.chevron_right class="size-3.5" />{/if}
+            <AppIcons.braces class="size-[13px] text-primary" />
+            <span>{t('toolInputParams')}</span>
+          </button>
+          {#if inputOpen}
+            <pre class="max-h-52 overflow-auto px-2 pb-2 font-mono text-[11px]">{toolState.inputText}</pre>
+          {/if}
+        </div>
       {/if}
 
       <!-- content section -->

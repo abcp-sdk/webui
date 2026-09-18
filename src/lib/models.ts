@@ -75,6 +75,9 @@ export interface ToolState {
   diff?: string | null
   additions?: number | null
   deletions?: number | null
+  /** Raw streamed tool-argument JSON (tool-input-delta), shown live until the
+   *  complete `input` arrives with `tool-call`. */
+  inputText?: string | null
 }
 
 export interface MessagePart {

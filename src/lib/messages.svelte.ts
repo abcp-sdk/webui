@@ -405,7 +405,7 @@ export class MessagesController {
     }
     const { event, params } = ev
     switch (event) {
-      case 'step-start':
+      case 'start-step':
       case 'text-start':
       case 'reasoning-start':
       case 'tool-input-start': {
@@ -414,12 +414,24 @@ export class MessagesController {
           : null
         const hasToolPart = current?.parts.some(p => p.type === 'tool') ?? false
         const sid = this.ensureStreamingMsg(
-          event === 'step-start' || (event === 'text-start' && hasToolPart),
+          event === 'start-step' || (event === 'text-start' && hasToolPart),
         )
         if (event === 'text-start' && params['id'] != null) {
           this.ensurePart(sid, params['id'] as string, 'text')
         } else if (event === 'reasoning-start' && params['id'] != null) {
           this.ensurePart(sid, `r${params['id']}`, 'reasoning')
+        } else if (event === 'tool-input-start' && params['id'] != null) {
+          this.startToolPart(
+            sid,
+            params['id'] as string,
+            (params['toolName'] ?? params['name'] ?? 'tool') as string,
+          )
+        }
+        break
+      }
+      case 'tool-input-delta': {
+        if (params['id'] != null && params['delta'] != null) {
+          this.appendToolInput(params['id'] as string, String(params['delta'] ?? ''))
         }
         break
       }
@@ -472,6 +484,11 @@ export class MessagesController {
               : (params['message'] ?? 'tool error')
         ) as string
         if (tcId != null) this.updateToolResult(tcId, null, { errorMsg: errMsg })
+        break
+      }
+      case 'tool-output-denied': {
+        const tcId = (params['toolCallId'] ?? params['id']) as string | undefined
+        if (tcId != null) this.updateToolResult(tcId, null, { errorMsg: 'denied' })
         break
       }
       case 'turn-complete':
@@ -560,6 +577,30 @@ export class MessagesController {
       } else {
         parts.push({ id: partId, type: reasoning ? 'reasoning' : 'text', text: delta, tool: '' })
       }
+      return { ...m, parts }
+    })
+  }
+
+  /** Create the tool part as soon as argument streaming begins. */
+  private startToolPart(msgId: string, partId: string, name: string) {
+    this.setMsg(msgId, m => {
+      if (m.parts.some(p => p.id === partId)) return m
+      const state: ToolState = { status: 'running', title: name, inputText: '' }
+      const part: ChatPart = { id: partId, type: 'tool', text: '', tool: name, state }
+      return { ...m, parts: [...m.parts, part] }
+    })
+  }
+
+  /** Accumulate streamed tool-argument JSON for the live preview. */
+  private appendToolInput(partId: string, delta: string) {
+    const sid = this.streamingId
+    if (!sid) return
+    this.setMsg(sid, m => {
+      const parts = m.parts.map(p => {
+        if (p.id !== partId) return p
+        const old: ToolState = p.state ?? { status: '', title: '' }
+        return { ...p, state: { ...old, inputText: (old.inputText ?? '') + delta } }
+      })
       return { ...m, parts }
     })
   }
