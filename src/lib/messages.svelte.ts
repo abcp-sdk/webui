@@ -60,6 +60,10 @@ export class MessagesController {
 
   private streamAbort: AbortController | null = null
   private streamingId: string | null = null
+  /** Local ERROR bubbles are not server chain members; keep them across
+   *  authoritative refreshes (mergeServer/fetchMessages) instead of dropping
+   *  them. Cleared per session in init. */
+  private localErrors: ChatMessage[] = []
   private nextSeq = 1_000_000
   private sessionListeners: SessionListener[] = []
 
@@ -120,6 +124,7 @@ export class MessagesController {
   }
 
   init() {
+    this.localErrors = []
     const sid = this.getSessionId()
     if (!sid) return
     void this.boot(sid)
@@ -186,7 +191,7 @@ export class MessagesController {
     try {
       const [msgs, more] = await this.api.messages(sid, undefined, 50)
       const chat = mapMessagesToChat(msgs)
-      this.messages = [...this.inFlightLocal(), ...chat]
+      this.messages = [...this.inFlightLocal(), ...this.localErrors, ...chat]
       this.renumber()
       this.hasMore = more
       const l = this.local
@@ -214,6 +219,7 @@ export class MessagesController {
       if (!hasServer || inFlight) byId.set(`local:${m.id}`, m)
     }
     for (const m of chat) byId.set(m.id, m)
+    for (const m of this.localErrors) byId.set(`local:${m.id}`, m)
     this.messages = [...byId.values()]
     this.renumber()
     this.syncedTipId = tipId
@@ -248,7 +254,7 @@ export class MessagesController {
         const existing = new Set(this.messages.map(m => m.id))
         this.messages = [...chat.filter(m => !existing.has(m.id)), ...this.messages]
       } else {
-        this.messages = [...this.inFlightLocal(), ...chat]
+        this.messages = [...this.inFlightLocal(), ...this.localErrors, ...chat]
       }
       this.renumber()
       this.hasMore = more
@@ -651,18 +657,20 @@ export class MessagesController {
 
   private addError(text: string) {
     const now = Date.now()
+    const err = {
+      id: `err${now}`,
+      role: 'error',
+      status: 'error' as const,
+      isLocal: true,
+      parts: [{ id: `p${now}`, type: 'text' as const, text, tool: '' }],
+      createdAt: new Date().toISOString(),
+      prevId: '',
+      seq: this.allocSeq(),
+    }
+    this.localErrors.push(err)
     this.messages = [
       ...this.messages.filter(m => m.status !== 'streaming'),
-      {
-        id: `err${now}`,
-        role: 'error',
-        status: 'error',
-        isLocal: true,
-        parts: [{ id: `p${now}`, type: 'text', text, tool: '' }],
-        createdAt: new Date().toISOString(),
-        prevId: '',
-        seq: this.allocSeq(),
-      },
+      err,
     ]
     this.streamingId = null
   }
