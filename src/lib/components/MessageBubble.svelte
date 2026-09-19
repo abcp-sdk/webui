@@ -11,7 +11,6 @@
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
   import { Dialog } from '$lib/components/ui/dialog'
-  import { actionSheet } from '$lib/overlays.svelte'
   import ToolPartView from './ToolPartView.svelte'
   import MediaAttachment from './MediaAttachment.svelte'
   import FileRefText from './FileRefText.svelte'
@@ -97,46 +96,10 @@
     return `${d.getMonth() + 1}/${d.getDate()} ${hm}`
   }
 
-  // ---- bubble menu: right-click (mouse only) ----
-  //
-  // The action sheet is opened by an explicit MOUSE right-click on the bubble.
-  // Touch/pen long-press is deliberately INERT: browsers also fire
-  // `contextmenu` on a long-press, which is what surfaced the sheet (with the
-  // message text as its title) on a press-and-hold. There is NO long-press
-  // listener — we only filter the contextmenu event.
-  function menuAvailable(): boolean {
-    if (isStreaming) return false
-    if (msg.role === 'system' || msg.role === 'event') return false
-    return true
-  }
-
-  async function openActions() {
-    const opts: { value: string; label: string; destructive?: boolean }[] = []
-    if (hasText) opts.push({ value: 'copy', label: t('copy') })
-    if (isUser && onResend) opts.push({ value: 'retry', label: t('retry') })
-    if (isUser && onEdit) opts.push({ value: 'edit', label: t('edit') })
-    opts.push({ value: 'undo', label: t('undo') })
-    const choice = await actionSheet({
-      title: hasText ? (msg.parts.find(p => p.type === 'text')?.text ?? '').slice(0, 60) : '',
-      actions: opts,
-    })
-    if (choice === 'copy') copy()
-    else if (choice === 'retry') retryOpen = true
-    else if (choice === 'edit') beginEdit()
-    else if (choice === 'undo') undoOpen = true
-  }
-
-  function onContextMenu(e: MouseEvent) {
-    // Only a real MOUSE interaction opens the sheet (right-click, or macOS
-    // ctrl-click — both report pointerType "mouse"). A touch/pen long-press
-    // also emits `contextmenu` (pointerType "touch"/"pen") and is ignored.
-    // This is the single guard — there is NO long-press timer/listener.
-    const pt = (e as PointerEvent).pointerType
-    if (pt === 'touch' || pt === 'pen') return
-    if (!menuAvailable()) return
-    e.preventDefault()
-    void openActions()
-  }
+  // NOTE: the bubble has NO context-menu / long-press action sheet.
+  // Selecting message text (notably long-press-to-select on touch) used to
+  // surface a stray popup, so that whole path was removed. All message actions
+  // live in the hover row below (copy / retry / edit / undo).
 
 </script>
 
@@ -156,7 +119,6 @@
         isUser && !isError && !isSystem && 'border-primary/40 bg-primary/12',
         !isUser && !isError && !isSystem && 'border-border/50 bg-card',
       )}
-      oncontextmenu={onContextMenu}
     >
       <div class="flex min-w-0 max-w-full flex-col items-start gap-2 text-left">
         {#if isError}
