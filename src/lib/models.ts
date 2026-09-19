@@ -342,6 +342,9 @@ export interface BackendCfg {
   token: string
 }
 
+/** Display name for a connection. The webui is served same-origin with the
+ *  agent, so the host no longer distinguishes accounts; fall back to the host
+ *  (useful for the `?base=` dev override) and let callers prefer a custom name. */
 export function backendNameFor(baseUrl: string): string {
   try {
     return new URL(baseUrl).hostname

@@ -36,7 +36,6 @@
   let local: LocalStore | null = null
 
   // setup form
-  let setupBase = $state('')
   let setupToken = $state('')
   let showToken = $state(false)
   let busy = $state(false)
@@ -123,26 +122,25 @@
     if (target > navDepth) navDepth = target
   })
 
-  // Where the connection form POINTS by default (the k3s standalone agent —
-  // the same backend the other clients use). This is only a PREFILL for the
-  // setup form: no token is ever baked in, so an install always starts at the
-  // setup / backends flow and the user picks (or adds) their own account.
-  // Overridable via ?base=…&token=… or VITE_AGENT_URL.
-  const DEFAULT_BASE = (import.meta.env.VITE_AGENT_URL as string | undefined) ??
-    'https://standalone-agent.temp.10.199.64.20.nip.io'
+  // The webui is served SAME-ORIGIN with the agent: the aggregating proxy in
+  // front forwards `/agent.v1.*` to the agent, so the API base is always this
+  // page's own origin. No domain is ever entered — a user supplies only a
+  // tenant token. `?base=` still overrides for local dev.
+  const SAME_ORIGIN_BASE = typeof location !== 'undefined' ? location.origin : ''
 
   async function boot() {
-    // A saved connection (or an explicit ?base=&token= link) goes straight in;
-    // otherwise the user lands on the connection form — an install must never
-    // silently sign in with a baked-in account.
+    // A saved token (or an explicit ?base=&token= link, dev only) goes straight
+    // in; otherwise the user lands on the connection form — an install must
+    // never silently sign in with a baked-in account.
     const prefs = Prefs.load()
     let base = prefs.baseUrl ?? ''
     let tok = prefs.token ?? ''
     const qp = new URLSearchParams(location.search)
     if (qp.get('base')) base = qp.get('base')!
     if (qp.get('token')) tok = qp.get('token')!
-    if (!base || !tok) {
-      setupBase = (base || DEFAULT_BASE).replace(/\/+$/, '')
+    // Default to same-origin; only an explicit ?base= can point elsewhere.
+    if (!base) base = SAME_ORIGIN_BASE
+    if (!tok) {
       setupToken = ''
       baseUrl = base
       token = tok
@@ -177,9 +175,9 @@
   }
 
   async function connect() {
-    const base = setupBase.trim()
+    const base = SAME_ORIGIN_BASE
     const tok = setupToken.trim()
-    if (!base || !tok || busy) return
+    if (!tok || busy) return
     busy = true
     try {
       const api = await AgentApi.create(base, tok)
@@ -201,8 +199,9 @@
   }
 
   async function switchBackend(b: BackendCfg) {
-    Prefs.save(b.baseUrl, b.token)
-    baseUrl = b.baseUrl
+    const base = SAME_ORIGIN_BASE
+    Prefs.save(base, b.token)
+    baseUrl = base
     token = b.token
     await enterApp()
   }
@@ -212,16 +211,21 @@
     backends = Prefs.backends()
   }
 
+  /** Show only a short, non-reversible tail of a token in the user list. */
+  function maskToken(tok: string): string {
+    if (tok.length <= 8) return '••••'
+    return `••••${tok.slice(-8)}`
+  }
+
   function logout() {
     Prefs.clearActive()
     token = ''
     store = null
-    setupBase = baseUrl
     setupToken = ''
     phase = 'setup'
   }
 
-  const canConnect = $derived(setupBase.trim() !== '' && setupToken.trim() !== '' && !busy)
+  const canConnect = $derived(setupToken.trim() !== '' && !busy)
 </script>
 
 {#if phase === 'app' && store}
@@ -245,12 +249,12 @@
         <p class="p-2 text-meta text-muted-foreground">{t('noSavedBackends')}</p>
       {/if}
       <div class="space-y-2">
-        {#each backends as b (b.baseUrl)}
+        {#each backends as b (b.token)}
           <div class="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
-            {#if b.baseUrl === baseUrl}<AppIcons.target class="size-4 text-primary" />{:else}<AppIcons.server class="size-4 text-muted-foreground" />{/if}
+            {#if b.token === token}<AppIcons.target class="size-4 text-primary" />{:else}<AppIcons.server class="size-4 text-muted-foreground" />{/if}
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-body">{b.name || b.baseUrl}</span>
-              <span class="block truncate text-micro text-muted-foreground">{b.baseUrl}</span>
+              <span class="block truncate text-body">{b.name || t('tokenLabel')}</span>
+              <span class="block truncate text-micro text-muted-foreground">{maskToken(b.token)}</span>
             </span>
             <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('deleteBackend')} onclick={() => void deleteBackend(b)}><AppIcons.delete class="size-4" /></button>
             <Button size="sm" variant="outline" onclick={() => void switchBackend(b)}>{t('connect')}</Button>
@@ -269,10 +273,6 @@
   <div class="flex h-full items-center justify-center overflow-y-auto p-6">
     <div class="w-full max-w-[480px]">
       <h1 class="mb-6 text-xl font-semibold">{t('appTitle')}</h1>
-      <label class="mb-4 block">
-        <span class="mb-1.5 block text-meta text-muted-foreground">{t('gatewayUrl')}</span>
-        <Input bind:value={setupBase} disabled={busy} placeholder="https://standalone-agent.temp.10.199.64.20.nip.io" />
-      </label>
       <label class="mb-6 block">
         <span class="mb-1.5 block text-meta text-muted-foreground">{t('tokenLabel')}</span>
         <span class="relative block">

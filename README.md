@@ -2,14 +2,22 @@
 
 Agent chat SPA over `agent.v1.AgentService` (Connect). **Svelte 5 (runes) +
 shadcn-svelte style components (bits-ui primitives) + lucide icons + Tailwind
-v4**, with the Flutter app's **sqlite-wasm (OPFS)** local mirror and a
-**PWA** (installable, offline shell).
+v4**, with the **sqlite-wasm (OPFS)** local mirror and a **PWA** (installable,
+offline shell).
 
-Full parity with `abcp-sdk/flutter`: setup gate + backend manager, session
+Full parity with the former Flutter client: setup gate + user manager, session
 list (search / multi-select / unread / live watchSessions), chat (local-first
 sync, streaming bubbles with reasoning + tool cards, drafts, attachments,
-voice), mailbox, config (appearance / backends / providers + gateway +
-models / presets / tools) and zh-en i18n.
+voice), mailbox, config (appearance / users / providers + gateway + models /
+presets / tools) and zh-en i18n.
+
+## Connection model (same-origin)
+
+The webui is served **same-origin with the agent**: an aggregating proxy (Caddy)
+in front forwards `/agent.v1.*` to the agent over h2c, and `/` serves this SPA.
+So the API base is always the page's own origin and the user enters **only a
+tenant token** — no backend/gateway URL. (Local dev can still override with
+`?base=`.)
 
 ## Run
 
@@ -20,10 +28,10 @@ npm run build      # PWA production build -> dist/
 npm run check      # svelte-check + tsc
 ```
 
-## Deploy (dev pod)
+## Deploy
 
-Served by nginx/Caddy from `dist/` with `/agent/*` reverse-proxied to the
-agent backend; OPFS needs a secure context (https).
+Built as a static image (nginx) and fronted by the aggregating Caddy that also
+reverse-proxies the agent. OPFS needs a secure context (https).
 
 ## Layout
 

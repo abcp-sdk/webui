@@ -106,16 +106,16 @@ export const Prefs = {
     }
   },
 
-  // One gateway host may serve several tenants, so a saved user is identified
-  // by the FULL connection (baseUrl + token), not the host alone.
+  // The webui is served same-origin with the agent, so a saved account is
+  // identified by its TOKEN alone (the base is always this origin).
   upsertBackend(b: BackendCfg) {
-    const list = Prefs.backends().filter(x => !(x.baseUrl === b.baseUrl && x.token === b.token))
+    const list = Prefs.backends().filter(x => x.token !== b.token)
     list.unshift(b)
     localStorage.setItem(K_BACKENDS, JSON.stringify(list))
   },
 
   removeBackend(b: BackendCfg) {
-    const list = Prefs.backends().filter(x => !(x.baseUrl === b.baseUrl && x.token === b.token))
+    const list = Prefs.backends().filter(x => x.token !== b.token)
     localStorage.setItem(K_BACKENDS, JSON.stringify(list))
   },
 }
