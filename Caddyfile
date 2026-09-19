@@ -1,0 +1,33 @@
+# The webui is served by an aggregating Caddy that is SAME-ORIGIN with the
+# agent RPC: `/` serves the static build, `/agent.v1.*` is reverse-proxied to
+# the agent over h2c. This is why the browser needs only a token — the API base
+# is always this page's own origin.
+#
+# Upstream agent address is overridable with AGENT_UPSTREAM (Caddy env), e.g.
+# `standalone-agent.temp.svc.cluster.local:80`.
+:8080 {
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	# Connect RPC (AgentService / AdminService) -> agent over cleartext HTTP/2.
+	handle /agent.v1.* {
+		reverse_proxy {$AGENT_UPSTREAM:standalone-agent.temp.svc.cluster.local:80} {
+			transport http {
+				versions h2c
+			}
+		}
+	}
+
+	# Static SPA with client-side routing fallback.
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
