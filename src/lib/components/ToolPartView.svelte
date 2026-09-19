@@ -5,9 +5,10 @@
   import type { ChatPart, ToolState } from '$lib/models'
   import type { AgentApi } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
-  import { mediaUrl, mimeToKind } from '$lib/media'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
+  import MediaAttachment from './MediaAttachment.svelte'
+  import type { FileRef } from '$lib/models'
 
   let {
     part,
@@ -40,16 +41,33 @@
     mime?: string | null
     name?: string | null
   }
-  const mediaRefs = $derived.by(() => {
-    const out: MediaRef[] = []
+  // First-class produced-file refs from `data.files` (the unified key), with
+  // the server-derived media metadata when present.
+  const fileRefs = $derived.by<FileRef[]>(() => {
+    const out: FileRef[] = []
     const collect = (v: unknown) => {
       if (v && typeof v === 'object' && !Array.isArray(v)) {
-        const code = (v as Record<string, unknown>)['code']
+        const o = v as Record<string, unknown>
+        const code = o['code']
         if (typeof code === 'string' && code) {
           out.push({
             code,
-            mime: ((v as Record<string, unknown>)['mime'] as string) ?? null,
-            name: ((v as Record<string, unknown>)['name'] as string) ?? null,
+            mime: (o['mime'] as string) ?? null,
+            name: (o['name'] as string) ?? null,
+            size: o['size'] != null ? Number(o['size']) : null,
+            width: o['width'] != null ? Number(o['width']) : null,
+            height: o['height'] != null ? Number(o['height']) : null,
+            durationMs:
+              o['duration_ms'] != null
+                ? Number(o['duration_ms'])
+                : o['durationMs'] != null
+                  ? Number(o['durationMs'])
+                  : null,
+            thumbCode:
+              (o['thumb_code'] as string) ??
+              (o['thumbCode'] as string) ??
+              null,
+            thumbhash: (o['thumbhash'] as string) ?? null,
           })
         }
       }
@@ -65,17 +83,6 @@
   const additions = $derived((toolState?.additions as number | undefined) ?? 0)
   const deletions = $derived((toolState?.deletions as number | undefined) ?? 0)
   const hasMeta = $derived(!!changeId || !!diffText || additions > 0 || deletions > 0)
-
-  const mediaUrls = $state<Record<string, string>>({})
-  $effect(() => {
-    for (const r of mediaRefs) {
-      if (!mediaUrls[r.code]) {
-        void mediaUrl(api, r.code).then(u => {
-          if (u) mediaUrls[r.code] = u
-        })
-      }
-    }
-  })
 
   /** flutter `toolDisplayName`: `todowrite` shows as `todo`. */
   function toolDisplayName(name: string): string {
@@ -190,20 +197,11 @@
         {/if}
       </div>
 
-      <!-- media refs (first-class cards) -->
-      {#if mediaRefs.length}
+      <!-- produced files (first-class cards, `data.files`) -->
+      {#if fileRefs.length}
         <div class="flex flex-wrap gap-2">
-          {#each mediaRefs as r (r.code)}
-            {@const kind = mimeToKind(r.mime)}
-            {#if kind === 'image' && mediaUrls[r.code]}
-              <img src={mediaUrls[r.code]} alt={r.name ?? r.code} class="max-h-40 rounded-md border border-border/50" />
-            {:else if kind === 'video' && mediaUrls[r.code]}
-              <video src={mediaUrls[r.code]} controls class="max-h-48 rounded-md border border-border/50"><track kind="captions" /></video>
-            {:else if kind === 'audio' && mediaUrls[r.code]}
-              <audio src={mediaUrls[r.code]} controls class="w-64"></audio>
-            {:else if mediaUrls[r.code]}
-              <a href={mediaUrls[r.code]} download={r.name ?? r.code} class="text-primary underline">{r.name ?? r.code}</a>
-            {/if}
+          {#each fileRefs as f (f.code)}
+            <MediaAttachment {api} file={f} siblings={fileRefs} />
           {/each}
         </div>
       {/if}

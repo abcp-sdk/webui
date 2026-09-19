@@ -28,6 +28,11 @@ export function mapMessagesToChat(msgs: Message[]): ChatMessage[] {
       name: p.name ?? null,
       mime: p.mime ?? null,
       size: p.size ?? null,
+      width: p.width ?? null,
+      height: p.height ?? null,
+      durationMs: p.durationMs ?? null,
+      thumbCode: p.thumbCode ?? null,
+      thumbhash: p.thumbhash ?? null,
     })),
   }))
 }
@@ -519,6 +524,21 @@ export class MessagesController {
                 mime: (params['mediaType'] as string | undefined) ?? null,
                 size:
                   params['size'] != null ? Number(params['size']) : null,
+                width:
+                  params['width'] != null ? Number(params['width']) : null,
+                height:
+                  params['height'] != null ? Number(params['height']) : null,
+                durationMs:
+                  params['durationMs'] != null
+                    ? Number(params['durationMs'])
+                    : params['duration_ms'] != null
+                      ? Number(params['duration_ms'])
+                      : null,
+                thumbCode:
+                  (params['thumbCode'] as string | undefined) ??
+                  (params['thumb_code'] as string | undefined) ??
+                  null,
+                thumbhash: (params['thumbhash'] as string | undefined) ?? null,
               },
             ],
           }))

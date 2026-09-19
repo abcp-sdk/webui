@@ -92,6 +92,13 @@ export interface MessagePart {
   name?: string | null
   mime?: string | null
   size?: number | null
+  // Server-derived media facts (may be absent until the agent's media probe
+  // finishes, or for non-media files).
+  width?: number | null
+  height?: number | null
+  durationMs?: number | null
+  thumbCode?: string | null
+  thumbhash?: string | null
 }
 
 export interface Message {
@@ -150,6 +157,25 @@ export interface ChatPart {
   name?: string | null
   mime?: string | null
   size?: number | null
+  width?: number | null
+  height?: number | null
+  durationMs?: number | null
+  thumbCode?: string | null
+  thumbhash?: string | null
+}
+
+/** A single produced-file descriptor, as emitted by tools in
+ *  `data.files` and by the built-in media tools. */
+export interface FileRef {
+  code: string
+  name?: string | null
+  mime?: string | null
+  size?: number | null
+  width?: number | null
+  height?: number | null
+  durationMs?: number | null
+  thumbCode?: string | null
+  thumbhash?: string | null
 }
 
 export interface ChatMessage {

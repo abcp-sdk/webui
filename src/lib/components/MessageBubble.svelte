@@ -43,6 +43,24 @@
 
   const hasText = $derived(msg.parts.some(p => p.type === 'text' || p.type === 'reasoning'))
 
+  // All file parts in this message (stable), so a file card can open the
+  // viewer with sibling navigation (←/→) across the message's files.
+  const fileRefs = $derived(
+    msg.parts
+      .filter(p => p.type === 'file' && p.code)
+      .map(p => ({
+        code: p.code as string,
+        name: p.name ?? null,
+        mime: p.mime ?? null,
+        size: p.size ?? null,
+        width: p.width ?? null,
+        height: p.height ?? null,
+        durationMs: p.durationMs ?? null,
+        thumbCode: p.thumbCode ?? null,
+        thumbhash: p.thumbhash ?? null,
+      })),
+  )
+
   let reasoningOpen = $state(false)
   let compactionOpen = $state(false)
   let editOpen = $state(false)
@@ -176,8 +194,8 @@
           {#if part.type === 'text'}
             <FileRefText text={part.text} {api} />
           {:else if part.type === 'file'}
-            {@const a = { api, code: part.code ?? '', name: part.name ?? '', mime: part.mime, size: part.size ?? null }}
-            <MediaAttachment {...a} />
+            {@const f = fileRefs.find(r => r.code === part.code) ?? { code: part.code ?? '', name: part.name ?? null, mime: part.mime ?? null, size: part.size ?? null }}
+            <MediaAttachment api={api} file={f} siblings={fileRefs} />
           {:else if part.type === 'reasoning'}
             <!-- flutter `_ReasoningBlock`: amber LEFT border, warning tint,
                  right-only radius, auto-expanded while streaming. -->

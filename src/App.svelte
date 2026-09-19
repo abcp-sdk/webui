@@ -17,6 +17,7 @@
   import { backendNameFor } from './lib/models'
   import Shell from './lib/Shell.svelte'
   import Overlays from './lib/components/Overlays.svelte'
+  import FileViewer from './lib/components/FileViewer.svelte'
   import LoadingScreen from './lib/components/LoadingScreen.svelte'
   import { Button } from './lib/components/ui/button'
   import { Input } from './lib/components/ui/input'
@@ -229,6 +230,7 @@
 </script>
 
 {#if phase === 'app' && store}
+  <FileViewer api={store.api} />
   <Shell
     {store}
     {themeMode}

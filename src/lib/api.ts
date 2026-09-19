@@ -142,6 +142,16 @@ export function messageFromPb(m: PbMessage): Message {
           name: (d['name'] as string) || '',
           mime: d['mime'] as string | undefined,
           size: d['size'] != null ? Number(d['size']) : undefined,
+          width: d['width'] != null ? Number(d['width']) : undefined,
+          height: d['height'] != null ? Number(d['height']) : undefined,
+          durationMs:
+            d['duration_ms'] != null
+              ? Number(d['duration_ms'])
+              : d['durationMs'] != null
+                ? Number(d['durationMs'])
+                : undefined,
+          thumbCode: (d['thumb_code'] as string | undefined) ?? (d['thumbCode'] as string | undefined),
+          thumbhash: (d['thumbhash'] as string | undefined) ?? undefined,
         })
         break
       case 'tool': {
@@ -314,15 +324,59 @@ export class AgentApi {
     return r.data
   }
 
+  /** Stream a file's bytes in order (GetFileStream, ConnectRPC). Yields chunks
+   *  as they arrive so large media can render progressively. */
+  async *streamFileBytes(code: string): AsyncGenerator<Uint8Array> {
+    for await (const chunk of this._c.getFileStream({ code })) {
+      if (chunk.data.length > 0) yield chunk.data
+    }
+  }
+
+  /** Stream a file into a Blob, invoking `onProgress(done,total)` as it goes. */
+  async streamFileBlob(
+    code: string,
+    mime: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<Blob> {
+    const parts: Uint8Array[] = []
+    let done = 0
+    let total = 0
+    for await (const chunk of this._c.getFileStream({ code })) {
+      parts.push(chunk.data)
+      done += chunk.data.length
+      total = Number(chunk.total)
+      onProgress?.(done, total)
+    }
+    return new Blob(parts as BlobPart[], {
+      type: mime || 'application/octet-stream',
+    })
+  }
+
   async fetchFileBlob(code: string): Promise<Blob> {
     const bytes = await this.fetchFileBytes(code)
     const meta = await this.fileHead(code)
     return new Blob([new Uint8Array(bytes)], { type: meta.contentType || 'application/octet-stream' })
   }
 
-  async fileHead(code: string): Promise<{ contentType: string | null; length: number }> {
+  async fileHead(code: string): Promise<{
+    contentType: string | null
+    length: number
+    width?: number | null
+    height?: number | null
+    durationMs?: number | null
+    thumbCode?: string | null
+    thumbhash?: string | null
+  }> {
     const r = await this._c.getFileMeta({ code })
-    return { contentType: r.mime || null, length: Number(r.size) }
+    return {
+      contentType: r.mime || null,
+      length: Number(r.size),
+      width: r.width ?? null,
+      height: r.height ?? null,
+      durationMs: r.durationMs != null ? Number(r.durationMs) : null,
+      thumbCode: r.thumbCode ?? null,
+      thumbhash: r.thumbhash ?? null,
+    }
   }
 
   // ---- messages ----
