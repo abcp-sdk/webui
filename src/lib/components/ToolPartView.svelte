@@ -1,7 +1,7 @@
 <script lang="ts">
   // ToolPartView — web port of flutter widgets/tool_part.dart: a foldable tool
   // card (header icon+name+status, sections for input / content / metadata,
-  // first-class media refs from data.images/videos/audio).
+  // first-class file refs from data.files).
   import type { ChatPart, ToolState } from '$lib/models'
   import type { AgentApi } from '$lib/api'
   import { t } from '$lib/i18n.svelte'
@@ -33,7 +33,7 @@
 
   const output = $derived(toolState?.output ?? '')
   const meta = $derived((toolState?.data ?? {}) as Record<string, unknown>)
-  const metaEntries = $derived(Object.entries(meta).filter(([k]) => !['images', 'videos', 'audio'].includes(k)))
+  const metaEntries = $derived(Object.entries(meta).filter(([k]) => k !== 'files'))
 
   interface MediaRef {
     code: string
@@ -54,11 +54,9 @@
         }
       }
     }
-    for (const key of ['images', 'videos', 'audio']) {
-      const v = meta[key]
-      if (Array.isArray(v)) v.forEach(collect)
-      else collect(v)
-    }
+    const files = meta['files']
+    if (Array.isArray(files)) files.forEach(collect)
+    else collect(files)
     return out
   })
 
