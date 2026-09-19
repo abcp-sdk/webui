@@ -307,11 +307,13 @@ export class AgentApi {
   async uploadFile(src: UploadedFileSource): Promise<UploadedFile> {
     const bytes = src.bytes
     if (!bytes || !bytes.length) throw new Error(`attachment has no bytes: ${src.name}`)
-    const r = await this._c.ingestFile({ data: bytes, name: src.name, mime: src.mimeType })
+    // No mime is sent: the agent derives the content type from the bytes and
+    // returns the authoritative value, which we adopt for local rendering.
+    const r = await this._c.ingestFile({ data: bytes, name: src.name })
     return {
       code: r.code,
       name: src.name,
-      mime: src.mimeType,
+      mime: r.mime || src.mimeType,
       size: bytes.length,
       deduped: false,
       localPath: '',

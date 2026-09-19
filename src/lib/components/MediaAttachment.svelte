@@ -54,7 +54,15 @@
   const ref = $derived<FileRef>(
     fileProp ?? { code: code ?? '', name, mime, size },
   )
+  const viewRef = $derived<FileRef>(
+    localUrl ? { ...ref, localUrl } : ref,
+  )
   const codeVal = $derived(ref.code)
+  // A not-yet-uploaded attachment has a synthetic `tmp-` code; never ask the
+  // server for it (it would 500). Only server codes are fetchable.
+  const serverCode = $derived(
+    codeVal && !codeVal.startsWith('tmp-') ? codeVal : '',
+  )
   const nameVal = $derived(ref.name || name || ref.code)
   const mimeVal = $derived(ref.mime ?? mime ?? null)
 
@@ -115,9 +123,9 @@
 
   // Full media bytes: only for media kinds, and only once visible.
   $effect(() => {
-    if (!visible || !codeVal) return
+    if (!visible || !serverCode) return
     if (kind !== 'image' && kind !== 'video' && kind !== 'audio') return
-    void mediaUrl(api, codeVal).then(u => {
+    void mediaUrl(api, serverCode).then(u => {
       if (u) url = u
     })
   })
@@ -125,9 +133,9 @@
   // Resolve missing media facts once, when the card is visible and the ref
   // did not already carry them.
   $effect(() => {
-    if (!visible || !codeVal || !needMeta || fetchedMeta !== null) return
+    if (!visible || !serverCode || !needMeta || fetchedMeta !== null) return
     void api
-      .fileHead(codeVal)
+      .fileHead(serverCode)
       .then(h => {
         fetchedMeta = {
           width: h.width,
@@ -157,7 +165,7 @@
   function open() {
     onTap?.()
     if (canView && codeVal) {
-      openViewer(ref, siblings.length > 0 ? siblings : [ref])
+      openViewer(viewRef, siblings.length > 0 ? siblings : [viewRef])
     } else if (shown) {
       window.open(shown, '_blank')
     }
@@ -205,7 +213,7 @@
   <div class="flex flex-wrap gap-2">
     {#if kind === 'image'}
       {#if imgError}
-        <button type="button" class="flex items-center gap-2 rounded-md border border-border/40 px-2.5 py-1.5 text-meta text-muted-foreground" onclick={() => (openViewer(ref), onTap?.())}>
+        <button type="button" class="flex items-center gap-2 rounded-md border border-border/40 px-2.5 py-1.5 text-meta text-muted-foreground" onclick={() => (openViewer(viewRef), onTap?.())}>
           <AppIcons.image_off class="size-4" /> {nameVal}
         </button>
       {:else}

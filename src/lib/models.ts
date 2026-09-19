@@ -176,6 +176,9 @@ export interface FileRef {
   durationMs?: number | null
   thumbCode?: string | null
   thumbhash?: string | null
+  /** UI-only: a local object URL for a not-yet-uploaded attachment. When set
+   *  the viewer uses it directly instead of fetching the code from the agent. */
+  localUrl?: string | null
 }
 
 export interface ChatMessage {

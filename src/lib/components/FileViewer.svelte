@@ -54,6 +54,12 @@
     zoom = 1
     panX = 0
     panY = 0
+    // A local (not-yet-uploaded) attachment already has an object URL.
+    if (c.localUrl) {
+      url = c.localUrl
+      loading = false
+      return
+    }
     loading = true
     progress = 0
     void (async () => {

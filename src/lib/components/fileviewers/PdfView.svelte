@@ -1,8 +1,16 @@
+<script module lang="ts">
+  // Module-scoped so every PdfView instance shares ONE pdfjs worker (the global
+  // worker port persists across documents; per-mount workers would leak).
+  let sharedPdfWorker: Worker | null = null
+</script>
+
 <script lang="ts">
-  // PdfView — pdfjs-dist canvas renderer, lazily imported. The worker is
-  // loaded from the bundled build via a Vite `?url` import so it stays
-  // same-origin (no CDN), which also keeps the ConnectRPC-only backend
-  // contract self-contained.
+  // PdfView — pdfjs-dist canvas renderer, lazily imported. The LEGACY build is
+  // used deliberately: the modern build assumes ES2025 iterator helpers
+  // (`Iterator`) and fails on browsers older than Chrome 122, while the legacy
+  // build bundles the needed polyfills. The worker is loaded from the bundled
+  // (same-origin) build so no CDN is involved and the ConnectRPC-only backend
+  // contract stays self-contained.
   import { onMount } from 'svelte'
   import { t } from '$lib/i18n.svelte'
   import { AppIcons } from '$lib/icons'
@@ -19,9 +27,14 @@
     let cancelled = false
     void (async () => {
       try {
-        const pdfjs = await import('pdfjs-dist')
-        const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default
-        pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
+        const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+        if (sharedPdfWorker === null) {
+          const workerUrl = (
+            await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')
+          ).default
+          sharedPdfWorker = new Worker(workerUrl, { type: 'module' })
+        }
+        pdfjs.GlobalWorkerOptions.workerPort = sharedPdfWorker
         const res = await fetch(src)
         const data = new Uint8Array(await res.arrayBuffer())
         const doc = await pdfjs.getDocument({ data }).promise
