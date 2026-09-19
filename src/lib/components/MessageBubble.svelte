@@ -97,33 +97,17 @@
     return `${d.getMonth() + 1}/${d.getDate()} ${hm}`
   }
 
-  // ---- bubble menu: long-press (touch) / right-click (mouse) ----
+  // ---- bubble menu: right-click (mouse only) ----
   //
-  // Mirrors flutter `GestureDetector(onLongPress: _actions)` + Compose
-  // `bubbleMenuGestures`: LONG-PRESS on the bubble chrome opens the action
-  // sheet, but a press ON TEXT is left to native selection. We detect "on
-  // text" by checking whether the press landed inside a text-bearing element —
-  // the browser's own selection then handles it.
-  let pressTimer: ReturnType<typeof setTimeout> | null = null
-  let pressStartedInText = false
-
-  function inSelectableText(target: EventTarget | null): boolean {
-    if (!(target instanceof Element)) return false
-    // genui markdown, code, or any element that opted into text selection.
-    return !!target.closest('p, h1, h2, h3, h4, h5, h6, li, code, pre, a, .md-body')
-  }
-
+  // The action sheet is opened by an explicit MOUSE right-click on the bubble.
+  // Touch/pen long-press is deliberately INERT: browsers also fire
+  // `contextmenu` on a long-press, which is what surfaced the sheet (with the
+  // message text as its title) on a press-and-hold. There is NO long-press
+  // listener — we only filter the contextmenu event.
   function menuAvailable(): boolean {
     if (isStreaming) return false
     if (msg.role === 'system' || msg.role === 'event') return false
     return true
-  }
-
-  function cancelPress() {
-    if (pressTimer) {
-      clearTimeout(pressTimer)
-      pressTimer = null
-    }
   }
 
   async function openActions() {
@@ -142,20 +126,13 @@
     else if (choice === 'undo') undoOpen = true
   }
 
-  function onPointerDown(e: PointerEvent) {
-    if (!menuAvailable()) return
-    pressStartedInText = inSelectableText(e.target)
-    cancelPress()
-    // Touch/pen: a long press opens the menu unless it started on text.
-    if (e.pointerType !== 'mouse') {
-      pressTimer = setTimeout(() => {
-        pressTimer = null
-        if (!pressStartedInText) void openActions()
-      }, 500)
-    }
-  }
-
   function onContextMenu(e: MouseEvent) {
+    // Only a real MOUSE interaction opens the sheet (right-click, or macOS
+    // ctrl-click — both report pointerType "mouse"). A touch/pen long-press
+    // also emits `contextmenu` (pointerType "touch"/"pen") and is ignored.
+    // This is the single guard — there is NO long-press timer/listener.
+    const pt = (e as PointerEvent).pointerType
+    if (pt === 'touch' || pt === 'pen') return
     if (!menuAvailable()) return
     e.preventDefault()
     void openActions()
@@ -179,11 +156,6 @@
         isUser && !isError && !isSystem && 'border-primary/40 bg-primary/12',
         !isUser && !isError && !isSystem && 'border-border/50 bg-card',
       )}
-      onpointerdown={onPointerDown}
-      onpointerup={cancelPress}
-      onpointercancel={cancelPress}
-      onpointerleave={cancelPress}
-      onpointermove={() => pressTimer && cancelPress()}
       oncontextmenu={onContextMenu}
     >
       <div class="flex min-w-0 max-w-full flex-col items-start gap-2 text-left">
