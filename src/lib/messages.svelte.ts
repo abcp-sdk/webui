@@ -491,6 +491,40 @@ export class MessagesController {
         if (tcId != null) this.updateToolResult(tcId, null, { errorMsg: 'denied' })
         break
       }
+      case 'file':
+      case 'reasoning-file': {
+        // A streamed media part the agent has already offloaded to the blob
+        // store; `code` is the file:<code> segment. Render it as a file part
+        // (same path as persisted file parts). Both `file` and
+        // `reasoning-file` are shown.
+        const code = params['code'] as string | undefined
+        if (code == null || code === '') break
+        const sid = this.ensureStreamingMsg(false)
+        const partId = `f${code}`
+        const existing = this.messages
+          .find(m => m.id === sid)
+          ?.parts.some(p => p.id === partId)
+        if (!existing) {
+          this.setMsg(sid, m => ({
+            ...m,
+            parts: [
+              ...m.parts,
+              {
+                id: partId,
+                type: 'file',
+                text: '',
+                tool: '',
+                code,
+                name: (params['name'] as string | undefined) ?? null,
+                mime: (params['mediaType'] as string | undefined) ?? null,
+                size:
+                  params['size'] != null ? Number(params['size']) : null,
+              },
+            ],
+          }))
+        }
+        break
+      }
       case 'turn-complete':
         this.finishStreaming()
         break
