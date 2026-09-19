@@ -155,7 +155,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class={cn(
-        'rounded-md border px-3 py-2.5',
+        'min-w-0 max-w-full rounded-md border px-3 py-2.5',
         isError && 'border-destructive/40 bg-destructive/10',
         isSystem && 'border-muted-foreground/25 bg-muted/30',
         isUser && !isError && !isSystem && 'border-primary/40 bg-primary/12',
@@ -168,7 +168,7 @@
       onpointermove={() => pressTimer && cancelPress()}
       oncontextmenu={onContextMenu}
     >
-      <div class="flex flex-col items-start gap-2 text-left">
+      <div class="flex min-w-0 max-w-full flex-col items-start gap-2 text-left">
         {#if isError}
           <span class="text-micro font-semibold text-destructive">{t('error')}</span>
         {/if}

@@ -94,7 +94,7 @@
 
 <div
   class={cn(
-    'rounded-sm text-meta',
+    'min-w-0 max-w-full rounded-sm text-meta',
     hasError ? 'bg-destructive/5' : 'bg-muted/35',
   )}
 >
@@ -122,10 +122,10 @@
   </button>
 
   {#if open}
-    <div class="space-y-2 px-2.5 pb-2.5">
+    <div class="min-w-0 space-y-2 px-2.5 pb-2.5">
       <!-- input section -->
       {#if Object.keys(input).length}
-        <div class="rounded-sm border border-border/50 bg-background/50">
+        <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
           <button
             type="button"
             class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
@@ -136,12 +136,12 @@
             <span>{t('toolInputParams')}</span>
           </button>
           {#if inputOpen}
-            <pre class="max-h-52 overflow-auto px-2 pb-2 font-mono text-[11px]">{prettyJson(input)}</pre>
+            <pre class="max-h-52 min-w-0 overflow-auto px-2 pb-2 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{prettyJson(input)}</pre>
           {/if}
         </div>
       {:else if toolState?.inputText}
         <!-- Arguments still streaming (tool-input-delta): raw JSON preview. -->
-        <div class="rounded-sm border border-border/50 bg-background/50">
+        <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
           <button
             type="button"
             class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
@@ -152,24 +152,24 @@
             <span>{t('toolInputParams')}</span>
           </button>
           {#if inputOpen}
-            <pre class="max-h-52 overflow-auto px-2 pb-2 font-mono text-[11px]">{toolState.inputText}</pre>
+            <pre class="max-h-52 min-w-0 overflow-auto px-2 pb-2 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{toolState.inputText}</pre>
           {/if}
         </div>
       {/if}
 
       <!-- content section -->
       {#if hasError}
-        <div class="rounded-sm border border-destructive/40 bg-background/50">
+        <div class="min-w-0 rounded-sm border border-destructive/40 bg-background/50">
           <button type="button" class="flex w-full items-center gap-1 px-2 py-1 text-micro text-destructive">
             <AppIcons.chevron_down class="size-3.5" />
             <AppIcons.error class="size-[13px]" />
             <span>{t('error')}</span>
           </button>
-          <pre class="max-h-52 overflow-auto px-2 pb-2 font-mono text-[11px] whitespace-pre-wrap text-destructive">{toolState?.error}</pre>
+          <pre class="max-h-52 min-w-0 overflow-auto px-2 pb-2 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap text-destructive">{toolState?.error}</pre>
         </div>
       {/if}
 
-      <div class="rounded-sm border border-border/50 bg-background/50">
+      <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
         <button
           type="button"
           class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
@@ -184,7 +184,7 @@
             {#if running}
               <p class="text-micro text-muted-foreground italic">{t('running')}</p>
             {:else if output}
-              <pre class="max-h-72 overflow-auto font-mono text-[11px] whitespace-pre-wrap">{output}</pre>
+              <pre class="max-h-72 min-w-0 overflow-auto font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{output}</pre>
             {/if}
           </div>
         {/if}
@@ -210,7 +210,7 @@
 
       <!-- metadata section -->
       {#if hasMeta}
-        <div class="rounded-sm border border-border/50 bg-background/50">
+        <div class="min-w-0 rounded-sm border border-border/50 bg-background/50">
           <button
             type="button"
             class="flex w-full items-center gap-1 px-2 py-1 text-micro text-muted-foreground"
@@ -221,7 +221,7 @@
             <span>{t('metadata')}</span>
           </button>
           {#if metaOpen}
-            <div class="px-2 pb-2">
+            <div class="min-w-0 px-2 pb-2">
               {#if changeId}
                 <div class="flex items-center gap-1 pb-1 text-micro">
                   <AppIcons.commit class="size-[13px] text-primary" />
@@ -237,7 +237,7 @@
                 </div>
               {/if}
               {#if diffText}
-                <div class="max-h-52 overflow-auto rounded-sm bg-muted/40 p-1 font-mono text-[11px] whitespace-pre-wrap">{diffText}</div>
+                <div class="max-h-52 min-w-0 overflow-auto rounded-sm bg-muted/40 p-1 font-mono text-[11px] wrap-anywhere whitespace-pre-wrap">{diffText}</div>
               {/if}
             </div>
           {/if}
