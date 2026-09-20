@@ -287,14 +287,18 @@
 
   /** Hold-to-talk (flutter `_holdToTalkButton`): press starts, release uploads. */
   async function startRecording() {
-    const ok = await recorder.start()
-    if (!ok) {
-      showErrorToast(t('voicePermission'))
-      return
-    }
+    if (recording) return
     recording = true
     voiceElapsed = 0
     voiceTimer = setInterval(() => (voiceElapsed += 200), 200)
+    const ok = await recorder.start()
+    if (!ok) {
+      // Roll the optimistic UI state back so a denied mic does not leave the
+      // button stuck in "recording".
+      if (voiceTimer) { clearInterval(voiceTimer); voiceTimer = null }
+      recording = false
+      showErrorToast(t('voicePermission'))
+    }
   }
 
   async function stopRecording() {
@@ -578,14 +582,28 @@
           <button
             type="button"
             class={cn(
-              'flex min-h-[42px] flex-1 items-center justify-center rounded-md border px-3 text-body select-none',
+              // `touch-none` + no text selection + no iOS long-press callout:
+              // a press-and-hold must NOT open the browser's native context /
+              // copy-paste panel, which would cancel the recording.
+              'flex min-h-[42px] flex-1 touch-none items-center justify-center rounded-md border px-3 text-body select-none [-webkit-touch-callout:none]',
               recording
                 ? 'border-destructive bg-destructive/12 font-semibold text-destructive'
                 : 'border-border/60 bg-muted text-muted-foreground',
             )}
-            onpointerdown={() => void startRecording()}
+            oncontextmenu={e => e.preventDefault()}
+            onpointerdown={e => {
+              // Capture the pointer so pointerup fires even if the finger
+              // drifts off the button; suppress the native long-press menu.
+              e.preventDefault()
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId)
+              } catch {
+                /* unsupported */
+              }
+              void startRecording()
+            }}
             onpointerup={() => void stopRecording()}
-            onpointerleave={() => recording && void stopRecording()}
+            onpointercancel={() => void stopRecording()}
           >
             {recording ? `${t('releaseToSend')} · ${fmtDuration(voiceElapsed)}` : t('holdToTalk')}
           </button>
