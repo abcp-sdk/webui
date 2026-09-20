@@ -22,6 +22,12 @@ export function trimBase(baseUrl: string): string {
 export function createAgentClient(baseUrl: string, token: string): AgentClient {
   const transport = createConnectTransport({
     baseUrl: trimBase(baseUrl),
+    // BINARY protobuf, not Connect-JSON. JSON encodes every `bytes` field as
+    // base64, and @bufbuild/protobuf falls back to a char-by-char string
+    // concatenation when the runtime lacks the native Uint8Array.toBase64
+    // (Chrome/Safari today) — that made file uploads (IngestFile) take seconds
+    // for a few MB. Binary carries the raw bytes with no base64 at all.
+    useBinaryFormat: true,
     interceptors: [bearerInterceptor(token)],
   })
   return createClient(AgentService, transport)
