@@ -4,6 +4,7 @@ import type { AgentClient } from './agent'
 import { createAgentClient } from './agent'
 import { fireAuthExpired, isAuthError, makeStreamEvent, type StreamEvent } from './events'
 import type {
+  Identity,
   MailboxEntry,
   Message,
   MessagePart,
@@ -670,6 +671,16 @@ export class AgentApi {
   async health(): Promise<boolean> {
     const r = await this._c.health({})
     return r.ok
+  }
+
+  /** The caller's resolved identity (tenant id/name + role). */
+  async identity(): Promise<Identity> {
+    const r = await this._guard(() => this._c.getIdentity({}))
+    return {
+      tenant: r.tenant,
+      tenantName: r.tenantName,
+      role: r.role === 'admin' ? 'admin' : 'tenant',
+    }
   }
 }
 

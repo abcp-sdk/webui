@@ -369,6 +369,16 @@ export interface BackendCfg {
   name: string
   baseUrl: string
   token: string
+  /** Human username (tenant name) resolved from the token at connect/switch
+   *  time via AgentService.GetIdentity. Absent for legacy entries. */
+  username?: string
+}
+
+/** The caller's resolved identity (from its bearer token). */
+export interface Identity {
+  tenant: string
+  tenantName: string
+  role: 'tenant' | 'admin'
 }
 
 /** Display name for a connection. The webui is served same-origin with the

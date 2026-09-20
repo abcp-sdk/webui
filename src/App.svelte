@@ -169,9 +169,30 @@
     try {
       store = await buildStore()
       phase = 'app'
+      // Backfill the username for entries saved before GetIdentity existed
+      // (best-effort, after the app is usable).
+      void refreshIdentity()
     } catch (e) {
       showErrorToast(String(e))
       phase = 'setup'
+    }
+  }
+
+  /** Re-resolve the active token's username and update the saved entry. */
+  async function refreshIdentity() {
+    if (!store) return
+    try {
+      const username = (await store.api.identity()).tenantName
+      if (!username) return
+      Prefs.upsertBackend({
+        name: username,
+        username,
+        baseUrl: SAME_ORIGIN_BASE,
+        token,
+      })
+      backends = Prefs.backends()
+    } catch {
+      /* identity optional */
     }
   }
 
@@ -183,8 +204,16 @@
     try {
       const api = await AgentApi.create(base, tok)
       await api.listSessions() // verify before saving
+      // Resolve the human username from the token (best-effort: never block
+      // sign-in on it).
+      let username = ''
+      try {
+        username = (await api.identity()).tenantName
+      } catch {
+        /* identity optional */
+      }
       Prefs.save(base, tok)
-      Prefs.upsertBackend({ name: backendNameFor(base), baseUrl: base, token: tok })
+      Prefs.upsertBackend({ name: username || backendNameFor(base), username, baseUrl: base, token: tok })
       baseUrl = base
       token = tok
       await enterApp()
@@ -205,6 +234,15 @@
     baseUrl = base
     token = b.token
     await enterApp()
+    // Refresh the cached username (older entries may predate GetIdentity, or
+    // the tenant name may have changed server-side).
+    try {
+      const username = (await store!.api.identity()).tenantName
+      Prefs.upsertBackend({ ...b, name: username || b.name, username })
+      backends = Prefs.backends()
+    } catch {
+      /* identity optional */
+    }
   }
 
   async function deleteBackend(b: BackendCfg) {
@@ -255,7 +293,7 @@
           <div class="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
             {#if b.token === token}<AppIcons.target class="size-4 text-primary" />{:else}<AppIcons.server class="size-4 text-muted-foreground" />{/if}
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-body">{b.name || t('tokenLabel')}</span>
+              <span class="block truncate text-body">{b.username || b.name || t('tokenLabel')}</span>
               <span class="block truncate text-micro text-muted-foreground">{maskToken(b.token)}</span>
             </span>
             <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('deleteBackend')} onclick={() => void deleteBackend(b)}><AppIcons.delete class="size-4" /></button>

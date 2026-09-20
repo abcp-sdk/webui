@@ -44,8 +44,7 @@
       <div class="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
         {#if activeToken === b.token}<AppIcons.target class="size-4 shrink-0 text-primary" />{:else}<AppIcons.server class="size-4 shrink-0 text-muted-foreground" />{/if}
         <span class="min-w-0 flex-1">
-          <span class="block truncate text-body">{b.name || b.baseUrl}</span>
-          <span class="block truncate text-micro text-muted-foreground">{b.baseUrl}</span>
+          <span class="block truncate text-body">{b.username || b.name || t('tokenLabel')}</span>
         </span>
         <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('deleteBackend')} onclick={() => void remove(b)}><AppIcons.delete class="size-4" /></button>
         <Button size="sm" variant="outline" disabled={activeToken === b.token} onclick={() => onBackendSwitched?.(b)}>
