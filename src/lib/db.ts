@@ -73,7 +73,11 @@ class WorkerLocalStore implements LocalStore {
         new Promise<unknown>((resolve, reject) => {
           const id = this.nextId++
           this.pending.set(id, { resolve, reject })
-          this.worker.postMessage({ type: 'call', id, method, args })
+          // Callers pass Svelte `$state` proxies (messages/drafts); structured
+          // clone cannot serialize a Proxy, so snapshot to plain JSON first.
+          // Every arg is JSON-safe application data.
+          const plain = JSON.parse(JSON.stringify(args)) as unknown[]
+          this.worker.postMessage({ type: 'call', id, method, args: plain })
         }),
     )
   }
