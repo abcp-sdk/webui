@@ -20,7 +20,9 @@
   } = $props()
 
   let backends = $state<BackendCfg[]>([])
-  let activeBase = $derived(store.api.baseUrl)
+  // A backend is identified by its TOKEN (multiple users may share one
+  // same-origin base URL), so the active-row check must be token-based too.
+  let activeToken = $derived(store.api.token)
 
   $effect(() => {
     backends = Prefs.backends()
@@ -38,16 +40,16 @@
     <p class="py-2 text-meta text-muted-foreground">{t('noSavedBackends')}</p>
   {/if}
   <div class="space-y-2">
-    {#each backends as b (b.baseUrl)}
+    {#each backends as b (b.token)}
       <div class="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5">
-        {#if activeBase === b.baseUrl}<AppIcons.target class="size-4 shrink-0 text-primary" />{:else}<AppIcons.server class="size-4 shrink-0 text-muted-foreground" />{/if}
+        {#if activeToken === b.token}<AppIcons.target class="size-4 shrink-0 text-primary" />{:else}<AppIcons.server class="size-4 shrink-0 text-muted-foreground" />{/if}
         <span class="min-w-0 flex-1">
           <span class="block truncate text-body">{b.name || b.baseUrl}</span>
           <span class="block truncate text-micro text-muted-foreground">{b.baseUrl}</span>
         </span>
         <button type="button" class="rounded p-1.5 text-muted-foreground hover:bg-muted" title={t('deleteBackend')} onclick={() => void remove(b)}><AppIcons.delete class="size-4" /></button>
-        <Button size="sm" variant="outline" disabled={activeBase === b.baseUrl} onclick={() => onBackendSwitched?.(b)}>
-          {activeBase === b.baseUrl ? t('connected') : t('connect')}
+        <Button size="sm" variant="outline" disabled={activeToken === b.token} onclick={() => onBackendSwitched?.(b)}>
+          {activeToken === b.token ? t('connected') : t('connect')}
         </Button>
       </div>
     {/each}
