@@ -56,6 +56,9 @@
   let voiceMode = $state(false)
   let voiceElapsed = $state(0)
   let voiceTimer: ReturnType<typeof setInterval> | null = null
+  // Bumped on every press/release so a late-resolving start() cannot show a
+  // stale error after the user already let go.
+  let recordToken = 0
   // Bottom sheet for the "+" affordance (flutter `_openAttachSheet`).
   let attachOpen = $state(false)
   let dragging = $state(false)
@@ -203,13 +206,17 @@
       sha256: null,
     }
     attachments = [...attachments, pending]
+    // Match by the STABLE local `code`, never object identity: Svelte 5 wraps
+    // the object pushed into the `$state` array in a proxy, so the element in
+    // `attachments` is a different reference than `pending` and an `a ===
+    // pending` check would never fire — the tile stayed "uploading" forever.
     const job = (async () => {
       try {
         const done = await store.api.uploadFile({ path: '', name: src.name, mimeType: src.mimeType, bytes: src.bytes })
-        attachments = attachments.map(a => (a === pending ? done : a))
+        attachments = attachments.map(a => (a.code === localKey ? done : a))
       } catch (e) {
         attachments = attachments.map(a =>
-          a === pending ? { ...a, uploadState: 'error', error: String(e) } : a,
+          a.code === localKey ? { ...a, uploadState: 'error', error: String(e) } : a,
         )
       }
       schedulePersist()
@@ -219,7 +226,7 @@
   }
 
   function removeAttachment(a: UploadedFile) {
-    attachments = attachments.filter(x => x !== a)
+    attachments = attachments.filter(x => x.code !== a.code)
     if (localUrls[a.code]) {
       URL.revokeObjectURL(localUrls[a.code])
       delete localUrls[a.code]
@@ -239,7 +246,7 @@
         mimeType: a.mime ?? blob.type,
         bytes,
       })
-      attachments = attachments.map(x => (x === a ? done : x))
+      attachments = attachments.map(x => (x.code === a.code ? done : x))
     } catch (e) {
       showErrorToast(String(e))
     }
@@ -289,9 +296,14 @@
   async function startRecording() {
     if (recording) return
     recording = true
+    const token = ++recordToken
     voiceElapsed = 0
     voiceTimer = setInterval(() => (voiceElapsed += 200), 200)
     const ok = await recorder.start()
+    // A release may have landed while the mic was still opening (the recorder
+    // then releases the stream and returns false). Only surface a permission
+    // error when THIS press is still the active one.
+    if (token !== recordToken) return
     if (!ok) {
       // Roll the optimistic UI state back so a denied mic does not leave the
       // button stuck in "recording".
@@ -304,8 +316,11 @@
   async function stopRecording() {
     if (voiceTimer) { clearInterval(voiceTimer); voiceTimer = null }
     if (!recording) return
-    const src = await recorder.stop()
+    recordToken++ // invalidate the pending start() error path
     recording = false
+    // `recorder.stop()` releases the mic (stops every track) BEFORE the bytes
+    // are uploaded, so the recording indicator clears immediately on release.
+    const src = await recorder.stop()
     if (src) void uploadOne(src)
     else showToast(t('voiceTooShort'))
   }
