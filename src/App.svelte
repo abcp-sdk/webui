@@ -4,7 +4,7 @@
   // the responsive two-tab shell.
   import { onMount } from 'svelte'
   import { AgentApi } from './lib/api'
-  import { setLocale, systemLocale, t } from './lib/i18n.svelte'
+  import { getLocale, setLocale, systemLocale, t } from './lib/i18n.svelte'
   import { Prefs, type ThemeMode } from './lib/prefs'
   import { openLocalStore } from './lib/db'
   import { scopeOf } from './lib/scope'
@@ -64,6 +64,24 @@
   function setUiLocale(l: 'system' | 'zh' | 'en') {
     localStorage.setItem('agent.uiLocale', l)
     setLocale(l === 'system' ? systemLocale() : l)
+    // A session whose locale is "follow" inherits the tenant config locale, so
+    // keep that in sync with the effective agent locale whenever the UI
+    // language changes (otherwise the agent keeps answering in the stale one).
+    void syncAgentLocale()
+  }
+
+  /** Push the effective agent locale (UI language when the pref is "follow")
+   *  to the tenant config KV, so a session's "follow" actually follows it. */
+  async function syncAgentLocale() {
+    if (!store) return
+    try {
+      await store.api.setConfigKey(
+        'locale',
+        Prefs.effectiveAgentLocale(getLocale() === 'zh'),
+      )
+    } catch {
+      /* best-effort */
+    }
   }
 
   // 401/403 anywhere → one-tap "sign in again" (flutter auth_gate.dart).
@@ -172,6 +190,10 @@
       // Backfill the username for entries saved before GetIdentity existed
       // (best-effort, after the app is usable).
       void refreshIdentity()
+      // Keep the tenant config locale aligned with the effective agent locale
+      // (UI language when the pref is "follow") so a session that follows it
+      // resolves correctly.
+      void syncAgentLocale()
     } catch (e) {
       showErrorToast(String(e))
       phase = 'setup'

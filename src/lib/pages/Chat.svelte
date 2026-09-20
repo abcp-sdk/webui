@@ -88,14 +88,22 @@
     ctrl = c
     prev?.dispose()
     c.init()
-    // restore draft
-    const d = store.chatDrafts[id]
-    text = d?.text ?? ''
-    attachments = d?.attachments ?? []
     void loadMeta()
     return () => {
       c.dispose()
     }
+  })
+
+  // Restore the draft ONLY when the open session changes. Kept in a separate
+  // effect that reads `chatDrafts` NON-reactively: draft persistence mutates
+  // that `$state` on every debounced keystroke/upload, and depending on it here
+  // re-ran the controller boot above — rebuilding the controller and re-fetching
+  // messages on every keystroke (the message list flickered).
+  $effect(() => {
+    const id = sid
+    const d = untrack(() => store.chatDrafts[id])
+    text = d?.text ?? ''
+    attachments = d?.attachments ?? []
   })
 
   async function loadMeta() {
@@ -706,7 +714,6 @@
           [t('variantLabel'), session?.variant || t('variantNone')],
           [t('presetLabel'), session?.preset || t('none')],
           [t('agentLocale'), session?.locale || t('agentLocaleFollow')],
-          [t('sessionGroupLabel'), session?.group || t('none')],
         ] as [label, value] (label)}
           <div class="flex items-start gap-3 border-t border-border/40 pt-2 first:border-t-0 first:pt-0">
             <span class="w-24 shrink-0 text-micro text-muted-foreground">{label}</span>
