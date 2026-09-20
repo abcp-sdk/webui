@@ -4,7 +4,7 @@
   // list with default-preset pick, edit dialog and delete.
   import type { AppStore } from '$lib/store.svelte'
   import type { Preset } from '$lib/models'
-  import { t } from '$lib/i18n.svelte'
+  import { t, getLocale } from '$lib/i18n.svelte'
   import { Prefs } from '$lib/prefs'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { confirmDialog } from '$lib/dialogs'
@@ -28,7 +28,12 @@
   async function load() {
     loading = true
     try {
-      presets = await store.api.presets()
+      // Localize the preset system prompt like ToolsDetail/PresetForm: the
+      // server resolves the requested agent locale; without it the panel fell
+      // back to the default English prompt.
+      presets = await store.api.presets(
+        Prefs.effectiveAgentLocale(getLocale() === 'zh'),
+      )
     } catch (e) {
       showErrorToast(String(e))
     }
