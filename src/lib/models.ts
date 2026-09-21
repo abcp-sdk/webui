@@ -184,7 +184,9 @@ export interface FileRef {
 export interface ChatMessage {
   id: string
   role: string
-  status: 'pending' | 'streaming' | 'complete' | 'error'
+  /** `sending` = optimistic user bubble awaiting the backend `message-added`
+   *  event (left spinner, actions hidden). */
+  status: 'sending' | 'streaming' | 'complete' | 'error'
   parts: ChatPart[]
   createdAt: string
   seq?: number | null
@@ -192,6 +194,11 @@ export interface ChatMessage {
   prevId: string
   /** Client-only bubble (optimistic user msg / streaming assistant). */
   isLocal: boolean
+  /** Server-assigned id for an optimistic bubble, learned from the Prompt
+   *  `accepted` response. Kept separate from `id` (the stable local key) so
+   *  the optimistic bubble and its persisted copy can coexist until the
+   *  backend `message-added` event lets `mergeServer` drop the former. */
+  serverId?: string
 }
 
 // ---- mailbox ----

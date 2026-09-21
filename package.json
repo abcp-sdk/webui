@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "check:types": "tsc --noEmit"
+    "check:types": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@abcp/agent-sdk": "file:../agent-sdk-typescript",
@@ -39,6 +40,7 @@
     "@tailwindcss/typography": "^0.5.20",
     "svelte-check": "^4.3.0",
     "typescript": "^5.9.3",
-    "vite": "^8.2.2"
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
   }
 }

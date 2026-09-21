@@ -33,6 +33,9 @@
   const isError = $derived(msg.role === 'error')
   const isSystem = $derived(msg.role === 'system' || msg.role === 'event')
   const isStreaming = $derived(msg.status === 'streaming')
+  // Optimistic user bubble awaiting the backend `message-added` confirmation:
+  // a spinner sits to its LEFT and every action is hidden until it lands.
+  const isSending = $derived(msg.status === 'sending')
 
   // Reasoning always renders ABOVE the rest (stable partition).
   const ordered = $derived<ChatPart[]>([
@@ -110,6 +113,16 @@
   </div>
 {:else}
   <div class={cn('mb-3 flex flex-col', isSystem ? 'items-center' : isUser ? 'items-end' : 'items-start')}>
+    <!-- Sending row: the spinner sits to the LEFT of the user bubble while the
+         backend has not yet confirmed the write. -->
+    <div class={cn('flex max-w-full items-center gap-2', isUser ? 'flex-row' : 'flex-row-reverse')}>
+    {#if isSending}
+      <span
+        class="size-3 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"
+        title={t('sending')}
+        aria-label={t('sending')}
+      ></span>
+    {/if}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class={cn(
@@ -168,19 +181,23 @@
         {/each}
       </div>
     </div>
+    </div>
 
     {#if !isStreaming && !isSystem}
       <div class={cn('mt-1 flex items-center gap-0.5 text-micro text-muted-foreground', isUser ? 'justify-end' : 'justify-start')}>
         {#if hasText}
           <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('copy')} aria-label={t('copy')} onclick={copy}><AppIcons.copy class="size-3.5" /></button>
         {/if}
-        {#if isUser && onResend}
+        <!-- undo / retry / edit stay HIDDEN while the send is unconfirmed. -->
+        {#if !isSending && isUser && onResend}
           <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('retry')} aria-label={t('retry')} onclick={() => (retryOpen = true)}><AppIcons.refresh class="size-3.5" /></button>
         {/if}
-        {#if isUser && onEdit}
+        {#if !isSending && isUser && onEdit}
           <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('edit')} aria-label={t('edit')} onclick={beginEdit}><AppIcons.edit class="size-3.5" /></button>
         {/if}
-        <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('undo')} aria-label={t('undo')} onclick={() => (undoOpen = true)}><AppIcons.undo class="size-3.5" /></button>
+        {#if !isSending}
+          <button type="button" class="rounded p-0.5 hover:bg-muted" title={t('undo')} aria-label={t('undo')} onclick={() => (undoOpen = true)}><AppIcons.undo class="size-3.5" /></button>
+        {/if}
         {#if msg.createdAt}
           <span class="ml-1 tabular-nums opacity-70">{fmtTime(msg.createdAt)}</span>
         {/if}

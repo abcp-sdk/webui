@@ -411,17 +411,14 @@ export class AgentApi {
   }
 
   async settings(id: string, settings: Record<string, unknown>): Promise<Session> {
-    const maxTurns = settings['max_turns'] as number | undefined
     const model = (settings['model'] as string) || ''
     const preset = (settings['preset'] as string) || ''
     const r = await this._guard(() => this._c.updateSettings({
       id,
       ...(model ? { model } : {}),
       ...(preset ? { preset } : {}),
-      systemPrompt: (settings['system_prompt'] as string) || '',
       locale: (settings['locale'] as string) || '',
       variant: (settings['variant'] as string) || '',
-      ...(maxTurns && maxTurns > 0 ? { maxTurns } : {}),
     }))
     return r.session ? sessionFromPb(r.session) : emptySession('')
   }
@@ -466,8 +463,15 @@ export class AgentApi {
 
   // ---- streams ----
 
-  async *streamEvents(sessionId: string, since = ''): AsyncGenerator<StreamEvent> {
-    for await (const e of this._c.watchSession({ id: sessionId, since })) {
+  async *streamEvents(
+    sessionId: string,
+    since = '',
+    signal?: AbortSignal,
+  ): AsyncGenerator<StreamEvent> {
+    // The signal lets the controller tear down a HALF-OPEN stream (a socket
+    // that never errors but stops delivering) and reconnect from the anchor.
+    const opts = signal ? { signal } : undefined
+    for await (const e of this._c.watchSession({ id: sessionId, since }, opts)) {
       const params = (e.params ?? {}) as Record<string, unknown>
       const runId = params['run_id']
       yield makeStreamEvent(e.event, params, e.eid, typeof runId === 'string' ? runId : '')

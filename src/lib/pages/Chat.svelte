@@ -164,6 +164,82 @@
     return (!!text.trim() || attachments.some(a => a.code)) && !!(ctrl && !ctrl.sending)
   }
 
+  // ---- deliver-to-mailbox (the running-session fourth action form) ----
+  // While a turn is RUNNING, typing text (or recording audio, which lands as an
+  // attachment) morphs the action circle into an ENVELOPE: sending enqueues the
+  // message into the session mailbox instead of prompting, and the running turn
+  // drains it at its next step boundary. A letter then flies to the top-bar
+  // mailbox button (whose red dot counts the pending entries).
+  let envelopeBtnEl: HTMLElement | null = $state(null)
+  let mailboxBtnEl: HTMLElement | null = $state(null)
+  let flyFrom = $state<{ x: number; y: number } | null>(null)
+  let flyTo = $state<{ x: number; y: number } | null>(null)
+  let flyEl: HTMLElement | null = $state(null)
+
+  function canDeliver(): boolean {
+    return !!(ctrl?.sending && (text.trim() || attachments.length))
+  }
+
+  /** FLIP the envelope glyph from the composer button to the mailbox button. */
+  function startFly() {
+    const f = envelopeBtnEl
+    const t = mailboxBtnEl
+    if (!f || !t) return
+    const a = f.getBoundingClientRect()
+    const b = t.getBoundingClientRect()
+    flyFrom = { x: a.left + a.width / 2, y: a.top + a.height / 2 }
+    flyTo = { x: b.left + b.width / 2, y: b.top + b.height / 2 }
+  }
+
+  // Run the fly animation once the ghost is mounted, then clear it.
+  $effect(() => {
+    const el = flyEl
+    const from = flyFrom
+    const to = flyTo
+    if (!el || !from || !to) return
+    const dx = to.x - from.x
+    const dy = to.y - from.y
+    const anim = el.animate(
+      [
+        { transform: 'translate(-50%,-50%) scale(1) rotate(0deg)', opacity: 1 },
+        {
+          transform: `translate(calc(-50% + ${dx * 0.5}px), calc(-50% + ${dy * 0.5 - 40}px)) scale(0.85) rotate(-16deg)`,
+          opacity: 1,
+          offset: 0.55,
+        },
+        {
+          transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.35) rotate(-32deg)`,
+          opacity: 0,
+        },
+      ],
+      { duration: 650, easing: 'cubic-bezier(.4,0,.2,1)' },
+    )
+    anim.onfinish = () => {
+      flyFrom = null
+      flyTo = null
+    }
+  })
+
+  async function deliver() {
+    if (!ctrl || sending) return
+    // Same all-or-nothing upload gate as send: never enqueue a partial batch.
+    if (inflightUploads.size) await Promise.allSettled([...inflightUploads])
+    const failed = attachments.filter(a => a.uploadState === 'error' || !a.code || a.code.startsWith('tmp-'))
+    if (failed.length) {
+      showErrorToast(t('uploadFailedRetry', { arg1: failed.length }))
+      return
+    }
+    const body = text
+    const files = attachments.filter(a => a.code)
+    // Capture the source rect BEFORE clearing the draft: clearing morphs the
+    // envelope button back to STOP and unmounts it.
+    startFly()
+    text = ''
+    attachments = []
+    persistDraft()
+    await ctrl.deliver(body, files)
+  }
+
   async function send() {
     if (!canSend() || !ctrl || sending) return
     sending = true
@@ -193,7 +269,10 @@
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault()
-      void send()
+      // While a turn is running, Enter DELIVERS to the mailbox instead of
+      // prompting (which would be refused by the running turn's lease).
+      if (canDeliver()) void deliver()
+      else void send()
     }
   }
 
@@ -512,10 +591,26 @@
           {session?.id}
         </button>
       </div>
-      <div class="ml-auto">
+      <div class="ml-auto flex items-center gap-0.5">
+        <!-- Mailbox, extracted from the ⋯ menu into its own button. The red
+             dot (top-right) counts PENDING (unconsumed) mailbox entries. -->
+        <button
+          type="button"
+          bind:this={mailboxBtnEl}
+          class="relative rounded p-1.5 text-muted-foreground hover:bg-muted"
+          title={t('mailbox')}
+          aria-label={t('mailbox')}
+          onclick={() => void menuAction('mailbox')}
+        >
+          <AppIcons.inbox class="size-[18px]" />
+          {#if (ctrl?.pendingMailbox ?? 0) > 0}
+            <span class="absolute top-0.5 right-0.5 flex min-w-[14px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] leading-[14px] font-bold text-destructive-foreground">
+              {ctrl?.pendingMailbox}
+            </span>
+          {/if}
+        </button>
         <DropdownMenu label={t('settingsTitle')}>
           <DropdownMenuItem onSelect={() => void menuAction('compact')}>{t('compactHistory')}</DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => void menuAction('mailbox')}>{t('mailbox')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void menuAction('fork')}>{t('fork')}</DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem class="text-destructive" onSelect={() => void menuAction('delete')}>{t('deleteSession')}</DropdownMenuItem>
@@ -593,7 +688,6 @@
           class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground hover:bg-muted disabled:opacity-40"
           title={voiceMode ? t('keyboardMode') : t('voiceMode')}
           aria-label={voiceMode ? t('keyboardMode') : t('voiceMode')}
-          disabled={ctrl.sending}
           onclick={() => (voiceMode = !voiceMode)}
         >
           {#if voiceMode}<AppIcons.keyboard class="size-[22px]" />{:else}<AppIcons.mic class="size-[22px]" />{/if}
@@ -651,9 +745,20 @@
         {/if}
 
         <!-- Right: one morphing action circle — WHITE fill with a colored
-             outline + colored glyph (blue send / red stop / muted attach),
-             never a solid colored fill. -->
-        {#if ctrl.sending}
+             outline + colored glyph. While a turn RUNS the circle keeps its
+             STOP form; the moment the user types/records, it morphs into the
+             ENVELOPE (deliver to mailbox). Otherwise: blue send / muted
+             attach, never a solid colored fill. -->
+        {#if ctrl.sending && canDeliver()}
+          <button
+            type="button"
+            bind:this={envelopeBtnEl}
+            class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary"
+            title={t('deliver')}
+            aria-label={t('deliver')}
+            onclick={() => void deliver()}
+          ><AppIcons.mail class="size-5" /></button>
+        {:else if ctrl.sending}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-destructive bg-card text-destructive" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><AppIcons.stop class="size-5" /></button>
         {:else if sending}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span></button>
@@ -697,6 +802,18 @@
           <AppIcons.download class="size-6" />
           {t('dropToAttach')}
         </div>
+      </div>
+    {/if}
+
+    <!-- flying letter: the envelope glyph animates from the composer button to
+         the top-bar mailbox button after a delivery. -->
+    {#if flyFrom && flyTo}
+      <div
+        bind:this={flyEl}
+        class="pointer-events-none fixed z-[80] flex size-7 items-center justify-center rounded-full border border-primary bg-card text-primary shadow-md"
+        style="left: {flyFrom.x}px; top: {flyFrom.y}px; transform: translate(-50%,-50%)"
+      >
+        <AppIcons.mail class="size-4" />
       </div>
     {/if}
   </div>
