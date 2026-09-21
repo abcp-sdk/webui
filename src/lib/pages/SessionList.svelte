@@ -5,9 +5,10 @@
   import type { PageProps } from '$lib/page-props'
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
-  import { promptDialog, confirmDialog, actionSheet } from '$lib/dialogs'
+  import { promptDialog, confirmDialog } from '$lib/dialogs'
   import { sessionName } from '$lib/models'
   import SessionRow from '$lib/components/SessionRow.svelte'
+  import ContextMenu, { type ContextMenuItem } from '$lib/components/ContextMenu.svelte'
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
 
@@ -130,18 +131,49 @@
     }
   }
 
-  async function sessionActions(sid: string) {    const s = store.sessionById(sid)
-    if (!s) return
-    // Long-press bottom sheet equivalent: delete (+ mark-read when unread).
-    const actions: string[] = []
-    if (store.isUnread(s)) actions.push('read')
-    actions.push('delete')
-    const pick = await actionSheet({
-      title: t('sessionActions'),
-      actions: actions.map(a => ({ value: a, label: a === 'read' ? t('markRead') : t('deleteSession'), destructive: a === 'delete' })),
-    })
-    if (pick === 'read') store.markSessionRead(sid)
-    else if (pick === 'delete') await deleteFlow(s.id)
+  // Row context menu (desktop right-click / mobile long-press), anchored at
+  // the pointer point.
+  let rowMenu = $state<{ sid: string; x: number; y: number } | null>(null)
+
+  function openRowMenu(sid: string, pt: { x: number; y: number }) {
+    rowMenu = { sid, ...pt }
+  }
+
+  const rowMenuItems = $derived.by(() => {
+    if (!rowMenu) return []
+    const s = store.sessionById(rowMenu.sid)
+    const items: ContextMenuItem[] = []
+    if (s && store.isUnread(s)) items.push({ value: 'read', label: t('markRead') })
+    items.push({ value: 'fork', label: t('fork') })
+    items.push({ value: 'delete', label: t('deleteSession'), destructive: true })
+    return items
+  })
+
+  async function onRowMenuPick(value: string) {
+    const sid = rowMenu?.sid
+    rowMenu = null
+    if (!sid) return
+    if (value === 'read') {
+      store.markSessionRead(sid)
+    } else if (value === 'fork') {
+      await forkFlow(sid)
+    } else if (value === 'delete') {
+      await deleteFlow(sid)
+    }
+  }
+
+  /** Fork a session from the LIST (without opening it): ask for the branch
+   *  name, fork, refresh the list. The fork appears as a new subsession row. */
+  async function forkFlow(sid: string) {
+    const branch = await promptDialog({ title: t('fork'), confirmLabel: t('create') })
+    if (!branch) return
+    try {
+      await store.api.fork(sid, branch)
+      await store.refreshSessions()
+      showToast(t('forked'))
+    } catch {
+      showErrorToast(t('forkFailed'))
+    }
   }
 
   async function deleteFlow(sid: string | null) {
@@ -232,9 +264,13 @@
           isChild={isChild}
           onToggleExpand={() => toggleExpand(s.id)}
           onTap={() => (selectMode ? toggle(s.id) : store.pickSession(s.id))}
-          onLongPress={selectMode ? null : () => void sessionActions(s.id)}
+          onMenuRequest={selectMode ? null : pt => openRowMenu(s.id, pt)}
         />
       {/each}
     {/if}
   </div>
+
+  {#if rowMenu}
+    <ContextMenu x={rowMenu.x} y={rowMenu.y} items={rowMenuItems} onPick={v => void onRowMenuPick(v)} onClose={() => (rowMenu = null)} />
+  {/if}
 </div>

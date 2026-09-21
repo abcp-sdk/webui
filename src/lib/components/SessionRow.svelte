@@ -23,7 +23,7 @@
     expanded = false,
     isChild = false,
     onTap,
-    onLongPress,
+    onMenuRequest,
     onToggleExpand,
   }: {
     session: Session
@@ -37,9 +37,49 @@
     expanded?: boolean
     isChild?: boolean
     onTap?: () => void
-    onLongPress?: (() => void) | null
+    /** Open the row's context menu at a pointer point (right-click or
+     *  long-press). Null disables it (e.g. select mode). */
+    onMenuRequest?: ((pt: { x: number; y: number }) => void) | null
     onToggleExpand?: () => void
   } = $props()
+
+  // Long-press (touch): 480ms hold without movement opens the context menu at
+  // the touch point. iOS Safari never fires `contextmenu`, so the timer is the
+  // ONLY mobile entry; Android fires both, and the click suppression below
+  // keeps the menu-open from also navigating into the session.
+  const LP_MS = 480
+  let lpTimer: ReturnType<typeof setTimeout> | null = null
+  let suppressTap = false
+
+  function lpStart(e: TouchEvent) {
+    if (selectable || !onMenuRequest) return
+    const t = e.touches[0]
+    if (!t) return
+    const pt = { x: t.clientX, y: t.clientY }
+    lpTimer = setTimeout(() => {
+      lpTimer = null
+      suppressTap = true
+      navigator.vibrate?.(10)
+      onMenuRequest?.(pt)
+    }, LP_MS)
+  }
+
+  function lpCancel() {
+    if (lpTimer !== null) {
+      clearTimeout(lpTimer)
+      lpTimer = null
+    }
+  }
+
+  function lpEnd(e: TouchEvent) {
+    lpCancel()
+    if (suppressTap) {
+      // The long-press fired: swallow the trailing click/tap so the row does
+      // not ALSO open the session behind the menu.
+      e.preventDefault()
+      suppressTap = false
+    }
+  }
 
   /** WeChat-style relative label — one-to-one with flutter `wechatTime`. */
   function fmtTime(iso: string): string {
@@ -60,16 +100,22 @@
 <button
   type="button"
   class={cn(
-    'flex w-full items-center px-3 py-2 text-left transition-colors',
+    'flex w-full items-center px-3 py-2 text-left transition-colors select-none [-webkit-touch-callout:none]',
     selected ? 'bg-primary/14' : isActive ? 'bg-primary/10' : 'hover:bg-muted/50',
   )}
   onclick={onTap}
   oncontextmenu={e => {
-    if (onLongPress && !selectable) {
+    // Desktop right-click: open the context menu AT the cursor instead of
+    // the browser's own menu.
+    if (onMenuRequest && !selectable) {
       e.preventDefault()
-      onLongPress()
+      onMenuRequest({ x: e.clientX, y: e.clientY })
     }
   }}
+  ontouchstart={lpStart}
+  ontouchmove={lpCancel}
+  ontouchend={lpEnd}
+  ontouchcancel={lpCancel}
 >
   {#if isChild}
     <span class="flex w-2.5 shrink-0 justify-center">
