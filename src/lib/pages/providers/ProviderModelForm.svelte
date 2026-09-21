@@ -7,6 +7,7 @@
   import { showToast, showErrorToast } from '$lib/toast.svelte'
   import { loadModelsDev } from '$lib/modelsdev'
   import { capabilityLabelKey } from './common'
+  import { Input } from '$lib/components/ui/input'
   import { AppIcons } from '$lib/icons'
   import CapabilityIcon from './CapabilityIcon.svelte'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
@@ -115,12 +116,12 @@
           <span>{t('modelIdReq')}</span>
           <button type="button" class="text-primary underline" onclick={() => void autofill()}>{t('autofill')}</button>
         </span>
-        <input bind:value={mid} class="h-9 w-full rounded-md border border-input bg-transparent px-3 font-mono text-sm outline-none focus-visible:border-ring" />
+        <Input bind:value={mid} class="font-mono" />
       </label>
 
       <label class="block">
         <span class="mb-1 block text-meta text-muted-foreground">{t('modelName')}</span>
-        <input bind:value={name} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+        <Input bind:value={name} />
       </label>
 
       <div class="flex items-center gap-2 rounded-md border border-input px-3 py-2.5">
@@ -131,7 +132,7 @@
       {#if capability === 'text'}
         <label class="block">
           <span class="mb-1 block text-meta text-muted-foreground">{t('contextLengthLabel')}</span>
-          <input bind:value={ctx} type="number" min="1" class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+          <Input bind:value={ctx} type="number" min="1" />
           <span class="mt-1 block text-micro text-muted-foreground">{t('contextOptional')}</span>
         </label>
       {:else}

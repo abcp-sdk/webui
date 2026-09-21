@@ -9,6 +9,8 @@
   import { getLocale } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { cn } from '$lib/utils'
+  import { Input } from '$lib/components/ui/input'
+  import { Textarea } from '$lib/components/ui/textarea'
   import PageHeader from '$lib/components/layout/PageHeader.svelte'
 
   let { store, showBack = false }: PageProps = $props()
@@ -68,15 +70,15 @@
   <div class="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
     <label class="block">
       <span class="mb-1 block text-meta text-muted-foreground">{t('presetId')}</span>
-      <input bind:value={id} class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+      <Input bind:value={id} />
     </label>
     <label class="block">
       <span class="mb-1 block text-meta text-muted-foreground">{t('systemPrompt')}</span>
-      <textarea bind:value={sysPrompt} rows="4" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"></textarea>
+      <Textarea bind:value={sysPrompt} rows={4} />
     </label>
     <label class="block">
       <span class="mb-1 block text-meta text-muted-foreground">{t('maxTurns')}</span>
-      <input bind:value={maxTurns} type="number" min="1" class="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring" />
+      <Input bind:value={maxTurns} type="number" min="1" />
     </label>
 
     <div>

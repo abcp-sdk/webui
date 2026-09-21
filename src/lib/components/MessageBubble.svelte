@@ -11,6 +11,7 @@
   import { cn } from '$lib/utils'
   import { AppIcons } from '$lib/icons'
   import { Dialog } from '$lib/components/ui/dialog'
+  import { Textarea } from '$lib/components/ui/textarea'
   import ToolPartView from './ToolPartView.svelte'
   import MediaAttachment from './MediaAttachment.svelte'
   import FileRefText from './FileRefText.svelte'
@@ -209,7 +210,7 @@
 <!-- edit dialog -->
 <Dialog bind:open={editOpen} title={t('editMessage')}>
   {#snippet children()}
-    <textarea bind:value={editText} rows="5" class="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"></textarea>
+    <Textarea bind:value={editText} rows={5} />
   {/snippet}
   {#snippet footer()}
     <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (editOpen = false)}>{t('cancel')}</button>
