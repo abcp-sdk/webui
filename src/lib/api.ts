@@ -448,17 +448,27 @@ export class AgentApi {
     return [(st['status'] as string) || 'idle', (st['parts'] as unknown[]) || []]
   }
 
-  async mailbox(id: string): Promise<MailboxEntry[]> {
-    const r = await this._c.mailbox({ id })
-    return r.mailbox.map(m => ({
-      id: m.id,
-      msgType: m.msgType,
-      payload: m.payload,
-      effectiveAt: m.effectiveAt || null,
-      status: m.status,
-      createdAt: m.createdAt,
-      consumedAt: m.consumedAt || null,
-    }))
+  /** One page of the mailbox, newest-first. `before` is the id of the oldest
+   *  entry the caller already holds ('' = the newest page); `hasMore` says
+   *  whether older entries remain. */
+  async mailbox(
+    id: string,
+    before = '',
+    limit = 0,
+  ): Promise<{ entries: MailboxEntry[]; hasMore: boolean }> {
+    const r = await this._c.mailbox({ id, before, limit })
+    return {
+      hasMore: r.hasMore,
+      entries: r.mailbox.map(m => ({
+        id: m.id,
+        msgType: m.msgType,
+        payload: m.payload,
+        effectiveAt: m.effectiveAt || null,
+        status: m.status,
+        createdAt: m.createdAt,
+        consumedAt: m.consumedAt || null,
+      })),
+    }
   }
 
   // ---- streams ----

@@ -178,7 +178,9 @@ export class MessagesController {
       return
     }
     try {
-      const entries = await this.api.mailbox(sid)
+      // Newest page only: pending entries are the most recent, so the badge
+      // reads correctly without paging the whole queue.
+      const { entries } = await this.api.mailbox(sid)
       this.pendingMailbox = entries.filter(e => e.status !== 'consumed').length
     } catch {
       /* keep the previous count */

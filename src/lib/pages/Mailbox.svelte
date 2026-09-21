@@ -11,26 +11,60 @@
 
   let { store }: PageProps = $props()
 
+  // NEWEST-FIRST, paged backward (older) as the user scrolls DOWN.
   let entries = $state<MailboxEntry[]>([])
   let loading = $state(true)
+  let loadingMore = $state(false)
+  let hasMore = $state(false)
   let error = $state('')
 
   const sid = $derived(store.activeSessionId ?? '')
+  let scrollEl: HTMLElement | null = $state(null)
 
   $effect(() => {
     const id = sid
     if (!id) return
     loading = true
+    hasMore = false
     void (async () => {
       try {
-        entries = await store.api.mailbox(id)
+        const r = await store.api.mailbox(id)
+        entries = r.entries
+        hasMore = r.hasMore
         error = ''
       } catch (e) {
         error = String(e)
       }
       loading = false
+      // New content replaced the list: start at the top (newest).
+      if (scrollEl) scrollEl.scrollTop = 0
     })()
   })
+
+  /** Fetch the next-older page, anchored on the OLDEST entry we hold. */
+  async function loadMore() {
+    const id = sid
+    const oldest = entries[entries.length - 1]
+    if (!id || loadingMore || !hasMore || oldest === undefined) return
+    loadingMore = true
+    try {
+      const r = await store.api.mailbox(id, oldest.id)
+      // Append the older page at the BOTTOM (newest-first ordering).
+      const seen = new Set(entries.map(e => e.id))
+      entries = [...entries, ...r.entries.filter(e => !seen.has(e.id))]
+      hasMore = r.hasMore
+    } catch {
+      /* keep what we have */
+    }
+    loadingMore = false
+  }
+
+  function onScroll() {
+    const el = scrollEl
+    if (!el || !hasMore || loadingMore) return
+    // Within ~120px of the bottom: load the next-older page.
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) void loadMore()
+  }
 
   function fmt(iso?: string | null): string {
     if (!iso) return ''
@@ -87,7 +121,7 @@
       <span class="ml-auto rounded-full bg-muted px-2 py-0.5 text-micro text-muted-foreground tabular-nums">{entries.length}</span>
     {/if}
   </header>
-  <div class="min-h-0 flex-1 overflow-y-auto p-3">
+  <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto p-3" onscroll={onScroll}>
     {#if loading}
       <div class="flex justify-center py-8">
         <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
@@ -163,6 +197,14 @@
             </div>
           </div>
         {/each}
+        <!-- Scroll-down load-more: older entries append below. -->
+        {#if loadingMore}
+          <div class="flex justify-center py-3">
+            <span class="size-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
+          </div>
+        {:else if !hasMore}
+          <p class="py-3 text-center text-micro text-muted-foreground">{t('noMoreMessages')}</p>
+        {/if}
       </div>
     {/if}
   </div>
