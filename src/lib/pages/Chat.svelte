@@ -166,10 +166,17 @@
   /** True while a submit is in progress (uploads awaited, RPC in flight). */
   let submitting = $state(false)
 
-  const busyComposer = $derived(!!ctrl && (ctrl.sending || ctrl.awaitingSend))
-
+  // The composer is locked ONLY by OUR OWN in-flight send — never by a turn
+  // running on the server. A running turn is exactly when the envelope
+  // (deliver-to-mailbox) is shown and expected to WORK; gating on
+  // `ctrl.sending` made the mailbox button a no-op while a turn ran.
   function canSend(): boolean {
-    return (!!text.trim() || attachments.some(a => a.code)) && !busyComposer
+    return (
+      (!!text.trim() || attachments.some(a => a.code)) &&
+      !!ctrl &&
+      !ctrl.sending &&
+      !ctrl.awaitingSend
+    )
   }
 
   // ---- deliver-to-mailbox animation ----
@@ -226,7 +233,9 @@
   })
 
   async function submit() {
-    if (!ctrl || submitting || busyComposer) return
+    // Block only our OWN pending send, not a server-side turn: delivering to
+    // the mailbox while a turn runs is the whole point of the envelope.
+    if (!ctrl || submitting || ctrl.awaitingSend) return
     submitting = true
     try {
       // Wait for every in-flight upload before sending (never a partial batch).
