@@ -27,8 +27,16 @@ describe('compareMessages', () => {
   })
 
   it('IGNORES createdAt (the clock-skew bug): earlier timestamp with larger seq still sorts later', () => {
-    const placeholder = msg({ id: 'assistant', seq: 2, createdAt: '2020-01-01T00:00:00.000Z' })
-    const persistedUser = msg({ id: 'user', seq: 1, createdAt: '2030-01-01T00:00:00.000Z' })
+    const placeholder = msg({
+      id: 'assistant',
+      seq: 2,
+      createdAt: '2020-01-01T00:00:00.000Z',
+    })
+    const persistedUser = msg({
+      id: 'user',
+      seq: 1,
+      createdAt: '2030-01-01T00:00:00.000Z',
+    })
     const sorted = [placeholder, persistedUser].sort(compareMessages)
     expect(ids(sorted)).toEqual(['user', 'assistant'])
   })
@@ -49,7 +57,12 @@ describe('orderMessages (server-authored chain)', () => {
     const uB = msg({ id: 'uB', prevId: 'aA' })
     const aB = msg({ id: 'aB', role: 'assistant', prevId: 'uB' })
     // Deliberately scrambled array order.
-    expect(ids(orderMessages([uB, aB, uA, aA]))).toEqual(['uA', 'aA', 'uB', 'aB'])
+    expect(ids(orderMessages([uB, aB, uA, aA]))).toEqual([
+      'uA',
+      'aA',
+      'uB',
+      'aB',
+    ])
   })
 
   it('orders a clean server chain by prevId', () => {
@@ -106,7 +119,10 @@ describe('orderMessages (server-authored chain)', () => {
   })
 
   it('does not mutate the input array or its elements', () => {
-    const input = [msg({ id: 'a', seq: 99 }), msg({ id: 'l', isLocal: true, seq: 0 })]
+    const input = [
+      msg({ id: 'a', seq: 99 }),
+      msg({ id: 'l', isLocal: true, seq: 0 }),
+    ]
     const snapshot = input.map(m => ({ id: m.id, seq: m.seq }))
     orderMessages(input)
     expect(input.map(m => ({ id: m.id, seq: m.seq }))).toEqual(snapshot)

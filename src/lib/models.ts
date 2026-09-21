@@ -3,24 +3,39 @@
  * overrides it. */
 export const FALLBACK_API_TYPE_CAPABILITIES: Record<string, string[]> = {
   'openai-compatible': [
-    'text', 'embedding', 'image', 'speech', 'transcription', 'realtime',
-  ],
-  'openai': [
-    'text', 'embedding', 'image', 'speech', 'transcription', 'realtime',
-  ],
-  'anthropic': ['text'],
-  'deepseek': ['text'],
-  'google': ['text'],
-  'vercel-compatible-gateway': [
-    'text', 'image', 'video', 'speech', 'transcription', 'embedding', 'rerank',
+    'text',
+    'embedding',
+    'image',
+    'speech',
+    'transcription',
     'realtime',
   ],
-  'cohere': ['text', 'rerank'],
+  openai: ['text', 'embedding', 'image', 'speech', 'transcription', 'realtime'],
+  anthropic: ['text'],
+  deepseek: ['text'],
+  google: ['text'],
+  'vercel-compatible-gateway': [
+    'text',
+    'image',
+    'video',
+    'speech',
+    'transcription',
+    'embedding',
+    'rerank',
+    'realtime',
+  ],
+  cohere: ['text', 'rerank'],
 }
 
 /** The 8 first-class modalities, in section order. */
 export const kModelCapabilities = [
-  'text', 'image', 'video', 'speech', 'transcription', 'embedding', 'rerank',
+  'text',
+  'image',
+  'video',
+  'speech',
+  'transcription',
+  'embedding',
+  'rerank',
   'realtime',
 ] as const
 
@@ -255,7 +270,9 @@ export interface ToolParam {
   defaultValue?: string | null
 }
 
-export function parseToolParams(schema?: Record<string, unknown> | null): ToolParam[] {
+export function parseToolParams(
+  schema?: Record<string, unknown> | null,
+): ToolParam[] {
   if (!schema) return []
   const properties = schema['properties']
   if (!properties || typeof properties !== 'object') return []
@@ -263,7 +280,9 @@ export function parseToolParams(schema?: Record<string, unknown> | null): ToolPa
     Array.isArray(schema['required']) ? schema['required'].map(String) : [],
   )
   const out: ToolParam[] = []
-  for (const [key, value] of Object.entries(properties as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(
+    properties as Record<string, unknown>,
+  )) {
     if (!value || typeof value !== 'object') continue
     const v = value as Record<string, unknown>
     const type = (v['type'] as string) || 'object'

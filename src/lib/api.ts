@@ -2,7 +2,12 @@
 // @abcp/agent-sdk (codegenv2: Struct→JsonObject, int64→bigint).
 import type { AgentClient } from './agent'
 import { createAgentClient } from './agent'
-import { fireAuthExpired, isAuthError, makeStreamEvent, type StreamEvent } from './events'
+import {
+  fireAuthExpired,
+  isAuthError,
+  makeStreamEvent,
+  type StreamEvent,
+} from './events'
 import type {
   Identity,
   MailboxEntry,
@@ -11,7 +16,6 @@ import type {
   ModelInfo,
   Preset,
   ProviderInfo,
-  ProviderModel,
   Session,
   ToolConfig,
   ToolConfigField,
@@ -43,7 +47,7 @@ function decodeJson(data: string): Record<string, unknown> {
 function valueToJson(v: unknown): unknown {
   if (!v || typeof v !== 'object') return null
   const k = (v as { kind?: { case?: string; value?: unknown } }).kind
-  if (!k || !k.case) return null
+  if (!k?.case) return null
   switch (k.case) {
     case 'nullValue':
       return null
@@ -52,7 +56,9 @@ function valueToJson(v: unknown): unknown {
     case 'boolValue':
       return k.value
     case 'listValue':
-      return ((k.value as { values?: unknown[] })?.values ?? []).map(valueToJson)
+      return ((k.value as { values?: unknown[] })?.values ?? []).map(
+        valueToJson,
+      )
     case 'structValue':
       return structToJson(k.value)
     default:
@@ -126,14 +132,26 @@ export function messageFromPb(m: PbMessage): Message {
   for (const [p, d] of decoded) {
     switch (p.type) {
       case 'text':
-        parts.push({ id: p.id, type: 'text', text: (d['text'] as string) || '' })
+        parts.push({
+          id: p.id,
+          type: 'text',
+          text: (d['text'] as string) || '',
+        })
         break
       case 'reasoning':
-        parts.push({ id: p.id, type: 'reasoning', text: (d['text'] as string) || '' })
+        parts.push({
+          id: p.id,
+          type: 'reasoning',
+          text: (d['text'] as string) || '',
+        })
         break
       case 'summary':
       case 'compaction':
-        parts.push({ id: p.id, type: 'compaction', text: (d['summary'] as string) || '' })
+        parts.push({
+          id: p.id,
+          type: 'compaction',
+          text: (d['summary'] as string) || '',
+        })
         break
       case 'file':
         parts.push({
@@ -151,7 +169,9 @@ export function messageFromPb(m: PbMessage): Message {
               : d['durationMs'] != null
                 ? Number(d['durationMs'])
                 : undefined,
-          thumbCode: (d['thumb_code'] as string | undefined) ?? (d['thumbCode'] as string | undefined),
+          thumbCode:
+            (d['thumb_code'] as string | undefined) ??
+            (d['thumbCode'] as string | undefined),
           thumbhash: (d['thumbhash'] as string | undefined) ?? undefined,
         })
         break
@@ -292,12 +312,22 @@ export class AgentApi {
     return r.session ? sessionFromPb(r.session) : emptySession('')
   }
 
-  async prompt(id: string, prompt: string, attachments: string[] = []): Promise<string> {
+  async prompt(
+    id: string,
+    prompt: string,
+    attachments: string[] = [],
+  ): Promise<string> {
     // File codes MUST be forwarded as attachment refs; omitting them silently
     // drops every picked image / file / recording.
-    for await (const ev of this._c.prompt({ id, prompt, attachments: attachments.map(code => ({ code })) })) {
+    for await (const ev of this._c.prompt({
+      id,
+      prompt,
+      attachments: attachments.map(code => ({ code })),
+    })) {
       if (ev.event === 'accepted') {
-        return ((ev.params as Record<string, unknown>)['message_id'] as string) || ''
+        return (
+          ((ev.params as Record<string, unknown>)['message_id'] as string) || ''
+        )
       }
     }
     return ''
@@ -307,7 +337,7 @@ export class AgentApi {
 
   async uploadFile(src: UploadedFileSource): Promise<UploadedFile> {
     const bytes = src.bytes
-    if (!bytes || !bytes.length) throw new Error(`attachment has no bytes: ${src.name}`)
+    if (!bytes?.length) throw new Error(`attachment has no bytes: ${src.name}`)
     // No mime is sent: the agent derives the content type from the bytes and
     // returns the authoritative value, which we adopt for local rendering.
     const r = await this._c.ingestFile({ data: bytes, name: src.name })
@@ -358,7 +388,9 @@ export class AgentApi {
   async fetchFileBlob(code: string): Promise<Blob> {
     const bytes = await this.fetchFileBytes(code)
     const meta = await this.fileHead(code)
-    return new Blob([new Uint8Array(bytes)], { type: meta.contentType || 'application/octet-stream' })
+    return new Blob([new Uint8Array(bytes)], {
+      type: meta.contentType || 'application/octet-stream',
+    })
   }
 
   async fileHead(code: string): Promise<{
@@ -384,7 +416,11 @@ export class AgentApi {
 
   // ---- messages ----
 
-  async messages(id: string, before?: string, limit = 30): Promise<[Message[], boolean]> {
+  async messages(
+    id: string,
+    before?: string,
+    limit = 30,
+  ): Promise<[Message[], boolean]> {
     const r = await this._c.listMessages({ id, limit, before: before ?? '' })
     const msgs = r.messages.map(messageFromPb)
     return [msgs, msgs.length >= limit]
@@ -410,16 +446,21 @@ export class AgentApi {
     return model
   }
 
-  async settings(id: string, settings: Record<string, unknown>): Promise<Session> {
+  async settings(
+    id: string,
+    settings: Record<string, unknown>,
+  ): Promise<Session> {
     const model = (settings['model'] as string) || ''
     const preset = (settings['preset'] as string) || ''
-    const r = await this._guard(() => this._c.updateSettings({
-      id,
-      ...(model ? { model } : {}),
-      ...(preset ? { preset } : {}),
-      locale: (settings['locale'] as string) || '',
-      variant: (settings['variant'] as string) || '',
-    }))
+    const r = await this._guard(() =>
+      this._c.updateSettings({
+        id,
+        ...(model ? { model } : {}),
+        ...(preset ? { preset } : {}),
+        locale: (settings['locale'] as string) || '',
+        variant: (settings['variant'] as string) || '',
+      }),
+    )
     return r.session ? sessionFromPb(r.session) : emptySession('')
   }
 
@@ -445,7 +486,10 @@ export class AgentApi {
   async state(id: string): Promise<[string, unknown[]]> {
     const r = await this._c.state({ id })
     const st = (r.state ?? {}) as Record<string, unknown>
-    return [(st['status'] as string) || 'idle', (st['parts'] as unknown[]) || []]
+    return [
+      (st['status'] as string) || 'idle',
+      (st['parts'] as unknown[]) || [],
+    ]
   }
 
   /** One page of the mailbox, newest-first. `before` is the id of the oldest
@@ -481,10 +525,18 @@ export class AgentApi {
     // The signal lets the controller tear down a HALF-OPEN stream (a socket
     // that never errors but stops delivering) and reconnect from the anchor.
     const opts = signal ? { signal } : undefined
-    for await (const e of this._c.watchSession({ id: sessionId, since }, opts)) {
+    for await (const e of this._c.watchSession(
+      { id: sessionId, since },
+      opts,
+    )) {
       const params = (e.params ?? {}) as Record<string, unknown>
       const runId = params['run_id']
-      yield makeStreamEvent(e.event, params, e.eid, typeof runId === 'string' ? runId : '')
+      yield makeStreamEvent(
+        e.event,
+        params,
+        e.eid,
+        typeof runId === 'string' ? runId : '',
+      )
     }
   }
 
@@ -504,11 +556,20 @@ export class AgentApi {
 
   // ---- config / providers / models / presets / tools ----
 
-  async setToolConfigValue(extId: string, name: string, value: unknown): Promise<void> {
+  async setToolConfigValue(
+    extId: string,
+    name: string,
+    value: unknown,
+  ): Promise<void> {
     await this._c.setExtensionConfig({
       extId,
       name,
-      value: { kind: { case: 'stringValue', value: value == null ? '' : String(value) } },
+      value: {
+        kind: {
+          case: 'stringValue',
+          value: value == null ? '' : String(value),
+        },
+      },
     })
   }
 
@@ -604,7 +665,9 @@ export class AgentApi {
   }
 
   async presets(locale?: string): Promise<Preset[]> {
-    const r = await this._guard(() => this._c.listPresets({ locale: locale ?? '' }))
+    const r = await this._guard(() =>
+      this._c.listPresets({ locale: locale ?? '' }),
+    )
     return r.presets.map(p => ({
       id: p.id,
       systemPrompt: p.systemPrompt,
@@ -631,7 +694,9 @@ export class AgentApi {
   }
 
   async tools(locale?: string): Promise<ToolInfo[]> {
-    const r = await this._guard(() => this._c.listTools({ locale: locale ?? '' }))
+    const r = await this._guard(() =>
+      this._c.listTools({ locale: locale ?? '' }),
+    )
     return r.tools.map(t => ({
       name: t.name,
       description: t.description,
@@ -716,5 +781,5 @@ export function emptySession(id: string): Session {
   }
 }
 
-export { modelRefOf }
 export type { ToolState }
+export { modelRefOf }

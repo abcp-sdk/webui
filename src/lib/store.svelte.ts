@@ -5,7 +5,11 @@
 import type { AgentApi } from './api'
 import type { LocalStore } from './db'
 import type { ChatDraft, ProviderDraft, Session } from './models'
-import { draftFromProvider, FALLBACK_API_TYPE_CAPABILITIES, type ProviderInfo } from './models'
+import {
+  draftFromProvider,
+  FALLBACK_API_TYPE_CAPABILITIES,
+  type ProviderInfo,
+} from './models'
 import { Prefs } from './prefs'
 
 export type SiderTab = 'chat' | 'config'
@@ -25,7 +29,9 @@ export type AppPage =
   | { kind: 'provider_models'; key: string; modelId: string | null }
 
 export function rootPageFor(tab: SiderTab): AppPage {
-  return tab === 'chat' ? { kind: 'chat_list', key: 'chat_list' } : { kind: 'config_root', key: 'config_root' }
+  return tab === 'chat'
+    ? { kind: 'chat_list', key: 'chat_list' }
+    : { kind: 'config_root', key: 'config_root' }
 }
 
 export class AppStore {
@@ -53,7 +59,9 @@ export class AppStore {
 
   /** Capability matrix from ListProvidersCatalog (api type -> capabilities).
    * Seeded with the bundled fallback; refreshed from the server on demand. */
-  providerCatalog = $state<Record<string, string[]>>({ ...FALLBACK_API_TYPE_CAPABILITIES })
+  providerCatalog = $state<Record<string, string[]>>({
+    ...FALLBACK_API_TYPE_CAPABILITIES,
+  })
 
   async refreshProviderCatalog(): Promise<void> {
     try {
@@ -126,7 +134,11 @@ export class AppStore {
     this.sessionTimer = setTimeout(() => this.startSessionWatch(), delay * 1000)
   }
 
-  private applySessionEvent(snapshot: boolean, upserts: Session[], removed: string[]) {
+  private applySessionEvent(
+    snapshot: boolean,
+    upserts: Session[],
+    removed: string[],
+  ) {
     this.sessionAttempt = 0
     if (snapshot) {
       this.sessions = [...upserts]
@@ -151,7 +163,9 @@ export class AppStore {
         if (i === -1) next.push(s)
         else next[i] = s
       }
-      this.sessions = removed.length ? next.filter(s => !removed.includes(s.id)) : next
+      this.sessions = removed.length
+        ? next.filter(s => !removed.includes(s.id))
+        : next
     }
     // The open session is being read live: advance its watermark so returning
     // to the list shows no stale badge.
@@ -235,7 +249,9 @@ export class AppStore {
     this.readSeqs[id] = seq
     Prefs.saveReadSeqs(this.readSeqs)
     void this.local?.setReadSeq(id, seq)
-    this.sessions = this.sessions.map(s => (s.id === id ? { ...s, unreadCount: 0 } : s))
+    this.sessions = this.sessions.map(s =>
+      s.id === id ? { ...s, unreadCount: 0 } : s,
+    )
   }
 
   unreadCountFor(s: Session): number {
@@ -269,7 +285,10 @@ export class AppStore {
     void this.local?.saveDraft(sessionId, d.text, d.attachments)
   }
 
-  saveDraftAttachments(sessionId: string, attachments: ChatDraft['attachments']) {
+  saveDraftAttachments(
+    sessionId: string,
+    attachments: ChatDraft['attachments'],
+  ) {
     const d = this.draftFor(sessionId)
     d.attachments = [...attachments]
     if (!d.text.trim() && !d.attachments.length) {
@@ -292,15 +311,17 @@ export class AppStore {
   }
 
   beginProviderDraft(existing: ProviderInfo | null, capability = 'text') {
-    this.providerDraft = existing ? draftFromProvider(existing) : {
-      originalId: null,
-      id: '',
-      capability,
-      apiType: 'openai-compatible',
-      baseUrl: '',
-      apiKey: '',
-      models: [],
-    }
+    this.providerDraft = existing
+      ? draftFromProvider(existing)
+      : {
+          originalId: null,
+          id: '',
+          capability,
+          apiType: 'openai-compatible',
+          baseUrl: '',
+          apiKey: '',
+          models: [],
+        }
   }
 
   endProviderDraft() {

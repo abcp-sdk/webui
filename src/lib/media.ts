@@ -136,11 +136,56 @@ export type PreviewKind =
   | 'none'
 
 const CODE_EXT = new Set([
-  'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx', 'py', 'go', 'rs', 'java', 'kt',
-  'swift', 'c', 'h', 'cc', 'cpp', 'hpp', 'cs', 'rb', 'php', 'sh', 'bash',
-  'zsh', 'fish', 'sql', 'css', 'scss', 'less', 'vue', 'svelte', 'lua', 'pl',
-  'r', 'dart', 'scala', 'clj', 'ex', 'exs', 'erl', 'hs', 'ml', 'toml', 'ini',
-  'conf', 'env', 'dockerfile', 'makefile', 'gradle', 'tf', 'proto',
+  'js',
+  'mjs',
+  'cjs',
+  'ts',
+  'tsx',
+  'jsx',
+  'py',
+  'go',
+  'rs',
+  'java',
+  'kt',
+  'swift',
+  'c',
+  'h',
+  'cc',
+  'cpp',
+  'hpp',
+  'cs',
+  'rb',
+  'php',
+  'sh',
+  'bash',
+  'zsh',
+  'fish',
+  'sql',
+  'css',
+  'scss',
+  'less',
+  'vue',
+  'svelte',
+  'lua',
+  'pl',
+  'r',
+  'dart',
+  'scala',
+  'clj',
+  'ex',
+  'exs',
+  'erl',
+  'hs',
+  'ml',
+  'toml',
+  'ini',
+  'conf',
+  'env',
+  'dockerfile',
+  'makefile',
+  'gradle',
+  'tf',
+  'proto',
 ])
 
 /** Resolve the most specific preview renderer for a (mime, name) pair. */
@@ -154,9 +199,15 @@ export function previewKind(mime?: string | null, name?: string): PreviewKind {
   if (m === MIME_DOCX || ext === 'docx') return 'docx'
   if (m === MIME_XLSX || ext === 'xlsx') return 'xlsx'
   if (m === MIME_PPTX || ext === 'pptx') return 'pptx'
-  if (m === 'text/markdown' || ext === 'md' || ext === 'markdown') return 'markdown'
+  if (m === 'text/markdown' || ext === 'md' || ext === 'markdown')
+    return 'markdown'
   if (m === 'application/json' || ext === 'json') return 'json'
-  if (m === 'text/csv' || m === 'text/tab-separated-values' || ext === 'csv' || ext === 'tsv')
+  if (
+    m === 'text/csv' ||
+    m === 'text/tab-separated-values' ||
+    ext === 'csv' ||
+    ext === 'tsv'
+  )
     return 'csv'
   if (m === 'text/html' || ext === 'html' || ext === 'htm') return 'html'
   if (CODE_EXT.has(ext)) return 'code'
@@ -168,7 +219,18 @@ export function previewKind(mime?: string | null, name?: string): PreviewKind {
 export function fileIconSlot(
   mime?: string | null,
   name?: string,
-): 'file_pdf' | 'file_doc' | 'file_sheet' | 'file_slides' | 'file_archive' | 'file_json' | 'file_image' | 'file_video' | 'file_audio' | 'file_code' | 'file' {
+):
+  | 'file_pdf'
+  | 'file_doc'
+  | 'file_sheet'
+  | 'file_slides'
+  | 'file_archive'
+  | 'file_json'
+  | 'file_image'
+  | 'file_video'
+  | 'file_audio'
+  | 'file_code'
+  | 'file' {
   const k = previewKind(mime, name)
   switch (k) {
     case 'pdf':
@@ -197,7 +259,13 @@ export function fileIconSlot(
       return 'file'
     default: {
       const ext = (name ?? '').split('.').pop()?.toLowerCase() ?? ''
-      if (ext === 'zip' || ext === 'tar' || ext === 'gz' || ext === '7z' || ext === 'rar')
+      if (
+        ext === 'zip' ||
+        ext === 'tar' ||
+        ext === 'gz' ||
+        ext === '7z' ||
+        ext === 'rar'
+      )
         return 'file_archive'
       return 'file'
     }
@@ -223,7 +291,15 @@ export function isTextMime(mime: string): boolean {
 /** True when the viewer has a dedicated renderer for the file. */
 export function isPreviewable(mime?: string | null, name?: string): boolean {
   const k = mimeToKind(mime)
-  if (k !== 'file') return k === 'image' || k === 'video' || k === 'audio' || k === 'pdf' || k === 'office' || k === 'text'
+  if (k !== 'file')
+    return (
+      k === 'image' ||
+      k === 'video' ||
+      k === 'audio' ||
+      k === 'pdf' ||
+      k === 'office' ||
+      k === 'text'
+    )
   return name ? isTextMime(guessMime(name)) : false
 }
 

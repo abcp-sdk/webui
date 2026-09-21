@@ -6,7 +6,13 @@ import type { AgentApi } from './api'
 import type { LocalStore } from './db'
 import type { StreamEvent } from './events'
 import { compareMessages, orderMessages } from './message-order'
-import type { ChatMessage, ChatPart, Message, ToolState, UploadedFile } from './models'
+import type {
+  ChatMessage,
+  ChatPart,
+  Message,
+  ToolState,
+  UploadedFile,
+} from './models'
 
 type SessionListener = (event: string, params: Record<string, unknown>) => void
 
@@ -115,7 +121,12 @@ export class MessagesController {
 
   private sendFailedMsg = (e: unknown): string => `send failed: ${e}`
 
-  constructor(api: AgentApi, getSessionId: () => string, local: LocalStore | null, opts?: { sendFailed?: (e: unknown) => string }) {
+  constructor(
+    api: AgentApi,
+    getSessionId: () => string,
+    local: LocalStore | null,
+    opts?: { sendFailed?: (e: unknown) => string },
+  ) {
     this.api = api
     this.getSessionId = getSessionId
     this.local = local
@@ -143,13 +154,16 @@ export class MessagesController {
 
   /** Only the LOCAL bubbles still in flight. */
   private inFlightLocal(): ChatMessage[] {
-    return this.messages.filter(m => m.isLocal && (m.status === 'streaming' || m.status === 'sending'))
+    return this.messages.filter(
+      m => m.isLocal && (m.status === 'streaming' || m.status === 'sending'),
+    )
   }
 
   private bumpSeqAfter(history: ChatMessage[]) {
     let maxSeq = -1
     for (const m of history) {
-      if (m.seq != null && m.seq < this.nextSeq && m.seq > maxSeq) maxSeq = m.seq
+      if (m.seq != null && m.seq < this.nextSeq && m.seq > maxSeq)
+        maxSeq = m.seq
     }
     if (maxSeq >= 0) this.nextSeq = maxSeq + 1
   }
@@ -276,7 +290,10 @@ export class MessagesController {
       const l = this.local
       if (l) {
         this.syncedTipId = chat.length ? chat[chat.length - 1]!.id : ''
-        await l.applyServerMessages(sid, msgs, { replace: true, tipId: this.syncedTipId })
+        await l.applyServerMessages(sid, msgs, {
+          replace: true,
+          tipId: this.syncedTipId,
+        })
         this.syncedOldestId = await l.oldestCachedId(sid)
       }
     } catch {
@@ -293,14 +310,16 @@ export class MessagesController {
     // Preserve: local error bubbles, and the LIVE streamed bubble (the server
     // copy of a step only lands AFTER its stream ends; until then the local
     // streaming row is the only copy and must survive the merge).
-    const streaming = this.messages.find(m => m.isLocal && m.id === this.streamingId) ?? null
+    const streaming =
+      this.messages.find(m => m.isLocal && m.id === this.streamingId) ?? null
     const byId = new Map<string, ChatMessage>()
     for (const m of this.messages) {
       if (m.isLocal) continue
       byId.set(m.id, m)
     }
     for (const m of chat) byId.set(m.id, m)
-    if (streaming !== null && !byId.has(streaming.id)) byId.set(streaming.id, streaming)
+    if (streaming !== null && !byId.has(streaming.id))
+      byId.set(streaming.id, streaming)
     for (const m of this.localErrors) byId.set(`err:${m.id}`, m)
     // Once the server holds the live step's id, the stream is over and the
     // server row supersedes our local copy (drop the flag).
@@ -328,7 +347,10 @@ export class MessagesController {
       const chat = mapMessagesToChat(msgs)
       if (before != null) {
         const existing = new Set(this.messages.map(m => m.id))
-        this.messages = [...chat.filter(m => !existing.has(m.id)), ...this.messages]
+        this.messages = [
+          ...chat.filter(m => !existing.has(m.id)),
+          ...this.messages,
+        ]
       } else {
         this.messages = [...this.inFlightLocal(), ...this.localErrors, ...chat]
       }
@@ -342,7 +364,11 @@ export class MessagesController {
     const l = this.local
     if (l) {
       try {
-        await l.persistMessages(this.getSessionId(), this.messages, this.syncedTipId)
+        await l.persistMessages(
+          this.getSessionId(),
+          this.messages,
+          this.syncedTipId,
+        )
         this.syncedOldestId = await l.oldestCachedId(this.getSessionId())
       } catch {
         /* ignore */
@@ -383,7 +409,11 @@ export class MessagesController {
     this.lastStreamEventAt = Date.now()
     void (async () => {
       try {
-        for await (const ev of this.api.streamEvents(sid, this.syncedTipId, ac.signal)) {
+        for await (const ev of this.api.streamEvents(
+          sid,
+          this.syncedTipId,
+          ac.signal,
+        )) {
           if (ac.signal.aborted) return
           this.lastStreamEventAt = Date.now()
           this.handleEvent(ev)
@@ -414,7 +444,11 @@ export class MessagesController {
     this.watchdogTimer && clearInterval(this.watchdogTimer)
     this.watchdogTimer = setInterval(() => {
       if (!this.sending) return
-      if (Date.now() - this.lastStreamEventAt < MessagesController.STREAM_STALE_MS) return
+      if (
+        Date.now() - this.lastStreamEventAt <
+        MessagesController.STREAM_STALE_MS
+      )
+        return
       const sid = this.subSid ?? this.getSessionId()
       if (!sid || sid !== this.getSessionId()) return
       void this.recoverStaleStream(sid)
@@ -442,14 +476,22 @@ export class MessagesController {
       const probe = await Promise.race([
         this.api
           .state(sid)
-          .then(([st]) => (st === 'busy' || st === 'running' ? ('busy' as const) : ('idle' as const)))
+          .then(([st]) =>
+            st === 'busy' || st === 'running'
+              ? ('busy' as const)
+              : ('idle' as const),
+          )
           .catch(() => 'dead' as const),
         new Promise<'timeout'>(r =>
           setTimeout(() => r('timeout'), MessagesController.PROBE_TIMEOUT_MS),
         ),
       ])
       // A fresh event may have landed while probing: stand down.
-      if (Date.now() - this.lastStreamEventAt < MessagesController.STREAM_STALE_MS) return
+      if (
+        Date.now() - this.lastStreamEventAt <
+        MessagesController.STREAM_STALE_MS
+      )
+        return
       if (sid !== this.getSessionId()) return
       if (probe === 'idle') {
         this.syncIdle()
@@ -457,7 +499,11 @@ export class MessagesController {
         return
       }
       const now = Date.now()
-      if (probe === 'busy' && now - this.lastRecoveryAt < MessagesController.HEALTHY_RECONNECT_COOLDOWN_MS) {
+      if (
+        probe === 'busy' &&
+        now - this.lastRecoveryAt <
+          MessagesController.HEALTHY_RECONNECT_COOLDOWN_MS
+      ) {
         return
       }
       this.lastRecoveryAt = now
@@ -499,7 +545,8 @@ export class MessagesController {
   private startIdleProbe() {
     this.idleProbeTimer && clearInterval(this.idleProbeTimer)
     this.idleProbeTimer = setInterval(() => {
-      if (Date.now() - this.lastActivity < MessagesController.IDLE_PROBE_EVERY) return
+      if (Date.now() - this.lastActivity < MessagesController.IDLE_PROBE_EVERY)
+        return
       this.api
         .state(this.getSessionId())
         .then(([st]) => {
@@ -581,7 +628,10 @@ export class MessagesController {
       }
       case 'tool-input-delta': {
         if (params['id'] != null && params['delta'] != null) {
-          this.appendToolInput(params['id'] as string, String(params['delta'] ?? ''))
+          this.appendToolInput(
+            params['id'] as string,
+            String(params['delta'] ?? ''),
+          )
         }
         break
       }
@@ -590,7 +640,12 @@ export class MessagesController {
           const sid = streamMsgId()
           if (sid == null) break
           this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
-          this.appendDelta(sid, params['id'] as string, String(params['text'] ?? ''), false)
+          this.appendDelta(
+            sid,
+            params['id'] as string,
+            String(params['text'] ?? ''),
+            false,
+          )
         }
         break
       case 'reasoning-delta':
@@ -598,14 +653,21 @@ export class MessagesController {
           const sid = streamMsgId()
           if (sid == null) break
           this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
-          this.appendDelta(sid, `r${params['id']}`, String(params['text'] ?? ''), true)
+          this.appendDelta(
+            sid,
+            `r${params['id']}`,
+            String(params['text'] ?? ''),
+            true,
+          )
         }
         break
       case 'tool-call': {
         const sid = streamMsgId()
         if (sid == null) break
         this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
-        const tcId = (params['toolCallId'] ?? params['id']) as string | undefined
+        const tcId = (params['toolCallId'] ?? params['id']) as
+          | string
+          | undefined
         if (tcId != null) {
           this.addToolPart(
             sid,
@@ -617,34 +679,48 @@ export class MessagesController {
         break
       }
       case 'tool-result': {
-        const tcId = (params['toolCallId'] ?? params['id']) as string | undefined
+        const tcId = (params['toolCallId'] ?? params['id']) as
+          | string
+          | undefined
         if (tcId == null) break
-        this.updateToolResult(tcId, params['formatted'] ?? params['output'] ?? params['result'], {
-          errorMsg: undefined,
-          changeId: params['change_id'] as string | undefined,
-          diff: params['diff'] as string | undefined,
-          additions: params['additions'] as number | undefined,
-          deletions: params['deletions'] as number | undefined,
-          data: (params['data'] as Record<string, unknown>) ?? undefined,
-        })
+        this.updateToolResult(
+          tcId,
+          params['formatted'] ?? params['output'] ?? params['result'],
+          {
+            errorMsg: undefined,
+            changeId: params['change_id'] as string | undefined,
+            diff: params['diff'] as string | undefined,
+            additions: params['additions'] as number | undefined,
+            deletions: params['deletions'] as number | undefined,
+            data: (params['data'] as Record<string, unknown>) ?? undefined,
+          },
+        )
         break
       }
       case 'tool-error': {
-        const tcId = (params['toolCallId'] ?? params['id']) as string | undefined
+        const tcId = (params['toolCallId'] ?? params['id']) as
+          | string
+          | undefined
         const errObj = params['error']
         const errMsg = (
           typeof errObj === 'string'
             ? errObj
             : errObj && typeof errObj === 'object'
-              ? ((errObj as Record<string, unknown>)['message'] ?? params['message'] ?? 'tool error')
+              ? ((errObj as Record<string, unknown>)['message'] ??
+                params['message'] ??
+                'tool error')
               : (params['message'] ?? 'tool error')
         ) as string
-        if (tcId != null) this.updateToolResult(tcId, null, { errorMsg: errMsg })
+        if (tcId != null)
+          this.updateToolResult(tcId, null, { errorMsg: errMsg })
         break
       }
       case 'tool-output-denied': {
-        const tcId = (params['toolCallId'] ?? params['id']) as string | undefined
-        if (tcId != null) this.updateToolResult(tcId, null, { errorMsg: 'denied' })
+        const tcId = (params['toolCallId'] ?? params['id']) as
+          | string
+          | undefined
+        if (tcId != null)
+          this.updateToolResult(tcId, null, { errorMsg: 'denied' })
         break
       }
       case 'file':
@@ -675,10 +751,8 @@ export class MessagesController {
                 code,
                 name: (params['name'] as string | undefined) ?? null,
                 mime: (params['mediaType'] as string | undefined) ?? null,
-                size:
-                  params['size'] != null ? Number(params['size']) : null,
-                width:
-                  params['width'] != null ? Number(params['width']) : null,
+                size: params['size'] != null ? Number(params['size']) : null,
+                width: params['width'] != null ? Number(params['width']) : null,
                 height:
                   params['height'] != null ? Number(params['height']) : null,
                 durationMs:
@@ -708,9 +782,12 @@ export class MessagesController {
         // bubble): a user_prompt shows up here once the agent has drained the
         // mailbox and written the chain row. `streaming:true` opens the
         // assistant step's bubble; its deltas then arrive under the same id.
-        const addedId = typeof params['message_id'] === 'string' ? params['message_id'] : ''
-        const prevId = typeof params['prev_id'] === 'string' ? params['prev_id'] : ''
-        const role = typeof params['role'] === 'string' ? params['role'] : 'assistant'
+        const addedId =
+          typeof params['message_id'] === 'string' ? params['message_id'] : ''
+        const prevId =
+          typeof params['prev_id'] === 'string' ? params['prev_id'] : ''
+        const role =
+          typeof params['role'] === 'string' ? params['role'] : 'assistant'
         const streaming = params['streaming'] === true
         if (addedId !== '') {
           if (streaming && role === 'assistant') {
@@ -762,7 +839,9 @@ export class MessagesController {
           typeof errObj === 'string'
             ? errObj
             : errObj && typeof errObj === 'object'
-              ? ((errObj as Record<string, unknown>)['message'] ?? params['message'] ?? 'Unknown error')
+              ? ((errObj as Record<string, unknown>)['message'] ??
+                params['message'] ??
+                'Unknown error')
               : (params['message'] ?? 'Unknown error')
         ) as string
         this.addError(content)
@@ -838,18 +917,31 @@ export class MessagesController {
     this.setMsg(msgId, m =>
       m.parts.some(p => p.id === partId)
         ? m
-        : { ...m, parts: [...m.parts, { id: partId, type, text: '', tool: '' }] },
+        : {
+            ...m,
+            parts: [...m.parts, { id: partId, type, text: '', tool: '' }],
+          },
     )
   }
 
-  private appendDelta(msgId: string, partId: string, delta: string, reasoning: boolean) {
+  private appendDelta(
+    msgId: string,
+    partId: string,
+    delta: string,
+    reasoning: boolean,
+  ) {
     this.setMsg(msgId, m => {
       const pidx = m.parts.findIndex(p => p.id === partId)
       const parts = [...m.parts]
       if (pidx >= 0) {
         parts[pidx] = { ...parts[pidx]!, text: parts[pidx]!.text + delta }
       } else {
-        parts.push({ id: partId, type: reasoning ? 'reasoning' : 'text', text: delta, tool: '' })
+        parts.push({
+          id: partId,
+          type: reasoning ? 'reasoning' : 'text',
+          text: delta,
+          tool: '',
+        })
       }
       return { ...m, parts }
     })
@@ -860,7 +952,13 @@ export class MessagesController {
     this.setMsg(msgId, m => {
       if (m.parts.some(p => p.id === partId)) return m
       const state: ToolState = { status: 'running', title: name, inputText: '' }
-      const part: ChatPart = { id: partId, type: 'tool', text: '', tool: name, state }
+      const part: ChatPart = {
+        id: partId,
+        type: 'tool',
+        text: '',
+        tool: name,
+        state,
+      }
       return { ...m, parts: [...m.parts, part] }
     })
   }
@@ -873,13 +971,21 @@ export class MessagesController {
       const parts = m.parts.map(p => {
         if (p.id !== partId) return p
         const old: ToolState = p.state ?? { status: '', title: '' }
-        return { ...p, state: { ...old, inputText: (old.inputText ?? '') + delta } }
+        return {
+          ...p,
+          state: { ...old, inputText: (old.inputText ?? '') + delta },
+        }
       })
       return { ...m, parts }
     })
   }
 
-  private addToolPart(msgId: string, partId: string, name: string, input: unknown) {
+  private addToolPart(
+    msgId: string,
+    partId: string,
+    name: string,
+    input: unknown,
+  ) {
     const asMap =
       input && typeof input === 'object' && !Array.isArray(input)
         ? (input as Record<string, unknown>)
@@ -888,7 +994,13 @@ export class MessagesController {
     this.setMsg(msgId, m => {
       const pidx = m.parts.findIndex(p => p.id === partId)
       const parts = [...m.parts]
-      const part: ChatPart = { id: partId, type: 'tool', text: '', tool: name, state }
+      const part: ChatPart = {
+        id: partId,
+        type: 'tool',
+        text: '',
+        tool: name,
+        state,
+      }
       if (pidx >= 0) parts[pidx] = part
       else parts.push(part)
       return { ...m, parts }
@@ -914,7 +1026,11 @@ export class MessagesController {
         if (p.id !== partId) return p
         const old = p.state ?? { status: '', title: '' }
         const output =
-          typeof result === 'string' ? result : result == null ? null : pretty(result)
+          typeof result === 'string'
+            ? result
+            : result == null
+              ? null
+              : pretty(result)
         return {
           ...p,
           state: {
@@ -944,12 +1060,6 @@ export class MessagesController {
     this.sending = false
     this.notify()
     void this.reconcile()
-  }
-
-  /** Resolve a server-authored id + anchor for a streamed bubble. Used by the
-   *  delta router; returns the id only when it is known server-side. */
-  private streamedId(): string | null {
-    return this.streamingId
   }
 
   /** After a turn completes (or a message-added nudge), pull the server delta
@@ -996,7 +1106,9 @@ export class MessagesController {
   }
 
   stop() {
-    void this.api.interrupt(this.getSessionId()).then(() => this.finishStreaming())
+    void this.api
+      .interrupt(this.getSessionId())
+      .then(() => this.finishStreaming())
   }
 
   async revert(messageId: string) {
@@ -1024,7 +1136,10 @@ export class MessagesController {
     this.clearStreaming()
     this.sending = false
     await this.fetchMessages()
-    await this.deliver(trimmed, codes.map(code => ({ code, name: null, mime: null } as UploadedFile)))
+    await this.deliver(
+      trimmed,
+      codes.map(code => ({ code, name: null, mime: null }) as UploadedFile),
+    )
   }
 
   async loadMore() {

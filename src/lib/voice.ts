@@ -49,7 +49,9 @@ export class VoiceRecorder {
   async hasPermission(): Promise<boolean> {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ audio: true })
-      s.getTracks().forEach(t => t.stop())
+      s.getTracks().forEach(t => {
+        t.stop()
+      })
       return true
     } catch {
       return false
@@ -66,12 +68,17 @@ export class VoiceRecorder {
       // A release may have arrived while getUserMedia was pending: release the
       // freshly-granted stream and attach nothing.
       if (this.stopRequested) {
-        stream.getTracks().forEach(t => t.stop())
+        stream.getTracks().forEach(t => {
+          t.stop()
+        })
         return
       }
       this.stream = stream
       // Ask the context for 16 kHz directly; the browser resamples the mic.
-      const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      const Ctor =
+        window.AudioContext ??
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext
       const ctx = new Ctor({ sampleRate: SAMPLE_RATE })
       this.ctx = ctx
       if (ctx.state === 'suspended') await ctx.resume()
@@ -95,9 +102,14 @@ export class VoiceRecorder {
     }
   }
 
-  private async attachWorklet(ctx: AudioContext, source: MediaStreamAudioSourceNode): Promise<void> {
+  private async attachWorklet(
+    ctx: AudioContext,
+    source: MediaStreamAudioSourceNode,
+  ): Promise<void> {
     if (ctx.audioWorklet === undefined) throw new Error('no AudioWorklet')
-    const url = URL.createObjectURL(new Blob([WORKLET_SRC], { type: 'application/javascript' }))
+    const url = URL.createObjectURL(
+      new Blob([WORKLET_SRC], { type: 'application/javascript' }),
+    )
     this.workletUrl = url
     await ctx.audioWorklet.addModule(url)
     // Keep ONE output: a 0-output node cannot be connected, and the failed
@@ -115,7 +127,10 @@ export class VoiceRecorder {
     this.worklet = node
   }
 
-  private attachScriptProcessor(ctx: AudioContext, source: MediaStreamAudioSourceNode): void {
+  private attachScriptProcessor(
+    ctx: AudioContext,
+    source: MediaStreamAudioSourceNode,
+  ): void {
     const node = ctx.createScriptProcessor(4096, 1, 1)
     node.onaudioprocess = e => {
       if (this.cancelled) return
@@ -130,11 +145,29 @@ export class VoiceRecorder {
 
   /** Release every resource immediately (mic indicator clears here). */
   private teardown() {
-    try { this.worklet?.port.close() } catch { /* ignore */ }
-    try { this.processor?.disconnect() } catch { /* ignore */ }
-    try { this.worklet?.disconnect() } catch { /* ignore */ }
-    try { this.source?.disconnect() } catch { /* ignore */ }
-    this.stream?.getTracks().forEach(t => t.stop())
+    try {
+      this.worklet?.port.close()
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.processor?.disconnect()
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.worklet?.disconnect()
+    } catch {
+      /* ignore */
+    }
+    try {
+      this.source?.disconnect()
+    } catch {
+      /* ignore */
+    }
+    this.stream?.getTracks().forEach(t => {
+      t.stop()
+    })
     void this.ctx?.close().catch(() => {})
     if (this.workletUrl !== null) {
       URL.revokeObjectURL(this.workletUrl)
@@ -154,7 +187,11 @@ export class VoiceRecorder {
     this.stopRequested = true
     const pending = this.starting
     if (pending !== null) {
-      try { await pending } catch { /* start failed */ }
+      try {
+        await pending
+      } catch {
+        /* start failed */
+      }
     }
     const rate = this.ctx?.sampleRate ?? SAMPLE_RATE
     const cancelled = this.cancelled
@@ -174,7 +211,11 @@ export class VoiceRecorder {
     this.stopRequested = true
     const pending = this.starting
     if (pending !== null) {
-      try { await pending } catch { /* start failed */ }
+      try {
+        await pending
+      } catch {
+        /* start failed */
+      }
     }
     this.frames = []
     this.teardown()

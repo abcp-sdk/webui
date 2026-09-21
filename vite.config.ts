@@ -1,8 +1,8 @@
 import path from 'node:path'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
-import { VitePWA } from 'vite-plugin-pwa'
 import { defineConfig } from 'vite'
+import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   plugins: [
@@ -14,7 +14,8 @@ export default defineConfig({
       manifest: {
         name: 'ABCP Agent',
         short_name: 'Agent',
-        description: 'Agent chat over the abc agent backend (agent.v1 via Connect)',
+        description:
+          'Agent chat over the abc agent backend (agent.v1 via Connect)',
         // Launch chrome follows the app's own (dark) palette; the icon hue
         // (AW violet) is used where the OS wants a brand colour.
         theme_color: '#0a0a0a',
@@ -24,8 +25,18 @@ export default defineConfig({
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icon-192-maskable.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-          { src: '/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          {
+            src: '/icon-192-maskable.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: '/icon-512-maskable.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
         ],
       },
       workbox: {

@@ -7,9 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "check": "biome check .",
+    "check:fix": "biome check --fix .",
+    "check:svelte": "svelte-check --tsconfig ./tsconfig.json",
     "check:types": "tsc --noEmit",
-    "test": "vitest run"
+    "format": "biome format --write .",
+    "lint": "biome lint .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@abcp/agent-sdk": "file:../agent-sdk-typescript",
@@ -36,6 +41,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.9",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tailwindcss/typography": "^0.5.20",
     "svelte-check": "^4.3.0",
