@@ -567,7 +567,7 @@
     ondrop={e => void onDrop(e)}
   >
     <!-- top bar -->
-    <header class="relative flex h-12 shrink-0 items-center border-b border-border/50 px-1">
+    <header class="relative flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
       <div class="flex min-w-0 items-center gap-2">
         <button type="button" class="rounded p-1.5 hover:bg-muted" aria-label="back" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
         <span class={cn('size-2 rounded-full', ctrl.sending ? 'bg-warning' : 'bg-success')}></span>
@@ -642,7 +642,7 @@
     </div>
 
     <!-- composer -->
-    <div class="shrink-0 border-t border-border/50 bg-card px-3 pt-1 pb-1">
+    <div class="shrink-0 border-t border-border bg-card px-3 pt-1 pb-1">
       {#if attachments.length}
         <div class="mb-2 flex flex-wrap gap-1 pt-1">
           {#each attachments as a (a.code + a.name)}

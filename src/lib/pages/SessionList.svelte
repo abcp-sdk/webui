@@ -163,10 +163,10 @@
 </script>
 
 <div class="flex h-full w-full flex-col">
-  <header class="flex h-12 shrink-0 items-center gap-1 border-b border-border px-2">
+  <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
     {#if selectMode}
       <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('cancel')} onclick={exitSelect}><AppIcons.close class="size-[18px]" /></button>
-      <span class="flex-1 truncate px-1 text-sm font-semibold">{t('selectedCount', { n: selected.size })}</span>
+      <span class="flex-1 truncate text-sm font-semibold">{t('selectedCount', { n: selected.size })}</span>
       <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('selectAll')} onclick={toggleAll}><AppIcons.list class="size-[18px]" /></button>
       <button
         type="button"
@@ -190,7 +190,7 @@
         placeholder={t('searchHint')}
       />
     {:else}
-      <span class="flex-1 truncate px-2 text-base font-semibold">{t('tabChat')}</span>
+      <span class="flex-1 truncate text-sm font-semibold">{t('tabChat')}</span>
       <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('search')} onclick={() => (searching = true)}><AppIcons.search class="size-[18px]" /></button>
       <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('selectSessions')} onclick={() => (selectMode = true)}><AppIcons.list class="size-[18px]" /></button>
       <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('newSession')} onclick={() => void create()}><AppIcons.add class="size-[18px]" /></button>
@@ -204,7 +204,7 @@
   {/if}
 
   <!-- Flutter keeps this label verbatim (no uppercase). -->
-  <div class="px-4 pt-2 pb-1 text-micro font-semibold tracking-wider text-muted-foreground">
+  <div class="px-4 pt-4 pb-1 text-micro font-semibold tracking-wider text-muted-foreground">
     {t('recent')}
   </div>
 
