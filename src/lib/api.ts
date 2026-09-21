@@ -615,6 +615,7 @@ export class AgentApi {
       entries: r.mailbox.map(m => ({
         id: m.id,
         msgType: m.msgType,
+        source: m.source,
         payload: m.payload,
         effectiveAt: m.effectiveAt || null,
         status: m.status,
