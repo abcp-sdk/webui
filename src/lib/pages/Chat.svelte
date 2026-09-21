@@ -683,14 +683,21 @@
 
         {#if voiceMode}
           <!-- Hold to talk: press-and-hold records, release sends (flutter
-               `_holdToTalkButton`, same 42px shell as the field). -->
+               `_holdToTalkButton`). Its shell must match the keyboard field's
+               OUTER box (44px) — see the min-h note below. -->
           <button
             type="button"
             class={cn(
               // `touch-none` + no text selection + no iOS long-press callout:
               // a press-and-hold must NOT open the browser's native context /
               // copy-paste panel, which would cancel the recording.
-              'flex min-h-[42px] flex-1 touch-none items-center justify-center rounded-md border px-3 text-body select-none [-webkit-touch-callout:none]',
+              // Height MUST match the keyboard field's outer box, not the textarea's
+              // min-h: the field is a <div> (42px content + 2px border = 44px)
+              // while this is a <button> (border-box, so min-h INCLUDES the
+              // border) — using 42px here made the composer jump 2px on every
+              // mic/keyboard switch. Text metrics also mirror the textarea
+              // (text-sm + leading-[21px]) so the line height matches too.
+              'flex min-h-[44px] flex-1 touch-none items-center justify-center rounded-md border px-3 text-sm leading-[21px] select-none [-webkit-touch-callout:none]',
               recording
                 ? 'border-destructive bg-destructive/12 font-semibold text-destructive'
                 : 'border-border/60 bg-muted text-muted-foreground',
