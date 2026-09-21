@@ -150,10 +150,38 @@
     store.saveDraftAttachments(sid, attachments)
   }
 
+  /** SAME metric classes for the textarea and the hold-to-talk button: one
+   *  source of truth for font-size / line-height / padding / block layout, so
+   *  the text origin is identical in both modes (see the composer markup).
+   *  Text is TOP-anchored via padding; do NOT centre it with flex, which
+   *  rounds (contentH - lineH) / 2 and shifts the label by half a pixel. */
+  const INNER_FIELD =
+    'block w-full min-h-[42px] border-0 bg-transparent px-3 py-[10px] text-sm leading-[21px]'
+
+  /** Auto-grow the composer textarea to its content (capped at 160px). */
+  function autoGrow(el: HTMLTextAreaElement) {
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+  }
+
   function schedulePersist() {
     draftTimer && clearTimeout(draftTimer)
     draftTimer = setTimeout(persistDraft, 300)
   }
+
+  // Restore the composer height when leaving voice mode. The textarea stays
+  // MOUNTED while hidden, so its value + inline height survive; re-applying
+  // the auto-grow keeps the box correct even if the width changed while it
+  // was invisible (a wrong height there is what used to collapse a
+  // multi-line draft back to one line).
+  $effect(() => {
+    if (voiceMode) return
+    const el = taEl
+    if (!el) return
+    // Track the value so the height is recomputed whenever the draft changes.
+    void text
+    autoGrow(el)
+  })
 
   // ---- sending ----
   // ONE path for both idle and busy sessions: every prompt goes to the mailbox,
@@ -681,63 +709,88 @@
           {#if voiceMode}<AppIcons.keyboard class="size-[22px]" />{:else}<AppIcons.mic class="size-[22px]" />{/if}
         </button>
 
-        {#if voiceMode}
-          <!-- Hold to talk: press-and-hold records, release sends (flutter
-               `_holdToTalkButton`). Its shell must match the keyboard field's
-               OUTER box (44px) — see the min-h note below. -->
-          <button
-            type="button"
+        <!-- Field shell: SHARED by both modes and never replaced, so the
+             geometry cannot drift between keyboard and voice. Border, radius,
+             background and the minimum height live HERE (one place), and the
+             recording tint is applied to this same box.
+
+             The inner control (textarea or hold-to-talk button) uses the SAME
+             metric class string (INNER_FIELD) in both branches: identical
+             font-size/line-height/padding, block layout, top-anchored text.
+             That is what makes the text origin sub-pixel identical — an
+             earlier version centred the voice label with flex
+             (`(42-21)/2 = 10.5px`) while the textarea anchored it with
+             `padding-top:10px`, so the label sat 0.5px lower and the composer
+             visibly twitched on every mic/keyboard switch.
+
+             The textarea stays MOUNTED in voice mode (only hidden): unmounting
+             it discarded the inline height the auto-grow handler had set, so
+             returning from voice collapsed a multi-line draft back to one
+             line. -->
+        <div
+          class={cn(
+            'relative min-h-[44px] flex-1 rounded-md border',
+            recording
+              ? 'border-destructive bg-destructive/12'
+              : 'border-border/60 bg-muted',
+          )}
+        >
+          <textarea
+            bind:this={taEl}
+            bind:value={text}
+            rows="1"
             class={cn(
-              // `touch-none` + no text selection + no iOS long-press callout:
-              // a press-and-hold must NOT open the browser's native context /
-              // copy-paste panel, which would cancel the recording.
-              // Height MUST match the keyboard field's outer box, not the textarea's
-              // min-h: the field is a <div> (42px content + 2px border = 44px)
-              // while this is a <button> (border-box, so min-h INCLUDES the
-              // border) — using 42px here made the composer jump 2px on every
-              // mic/keyboard switch. Text metrics also mirror the textarea
-              // (text-sm + leading-[21px]) so the line height matches too.
-              'flex min-h-[44px] flex-1 touch-none items-center justify-center rounded-md border px-3 text-sm leading-[21px] select-none [-webkit-touch-callout:none]',
-              recording
-                ? 'border-destructive bg-destructive/12 font-semibold text-destructive'
-                : 'border-border/60 bg-muted text-muted-foreground',
+              INNER_FIELD,
+              'max-h-40 resize-none outline-none placeholder:text-muted-foreground',
+              voiceMode && 'invisible',
             )}
-            oncontextmenu={e => e.preventDefault()}
-            onpointerdown={e => {
-              // Capture the pointer so pointerup fires even if the finger
-              // drifts off the button; suppress the native long-press menu.
-              e.preventDefault()
-              try {
-                e.currentTarget.setPointerCapture(e.pointerId)
-              } catch {
-                /* unsupported */
-              }
-              void startRecording()
+            placeholder={attachments.length ? '' : t('typeMessage')}
+            onkeydown={onKeydown}
+            onpaste={onPaste}
+            oninput={e => {
+              schedulePersist()
+              autoGrow(e.currentTarget)
             }}
-            onpointerup={() => void stopRecording()}
-            onpointercancel={() => void stopRecording()}
-          >
-            {recording ? `${t('releaseToSend')} · ${fmtDuration(voiceElapsed)}` : t('holdToTalk')}
-          </button>
-        {:else}
-          <div class="flex min-h-[42px] flex-1 items-center rounded-md border border-border/60 bg-muted">
-            <textarea
-              bind:this={taEl}
-              bind:value={text}
-              rows="1"
-              class="max-h-40 min-h-[42px] flex-1 resize-none border-0 bg-transparent px-3 py-[10px] text-sm leading-[21px] outline-none placeholder:text-muted-foreground"
-              placeholder={attachments.length ? '' : t('typeMessage')}
-              onkeydown={onKeydown}
-              onpaste={onPaste}
-              oninput={e => {
-                schedulePersist()
-                const el = e.currentTarget
-                el.style.height = 'auto'
-                el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+          ></textarea>
+
+          {#if voiceMode}
+            <button
+              type="button"
+              class={cn(
+                INNER_FIELD,
+                // `touch-none` + no text selection + no iOS long-press callout:
+                // a press-and-hold must NOT open the browser's native context /
+                // copy-paste panel, which would cancel the recording.
+                // `items-start` is load-bearing: a <button>'s UA style
+                // vertically CENTRES its content box, so the label landed at
+                // (42-21)/2 = 10.5px while the textarea anchored it at
+                // padding-top: 10px. Top-aligning makes both text origins
+                // compute from the same padding (sub-pixel identical) instead
+                // of relying on two coincidentally-close numbers.
+                'absolute inset-0 flex items-start justify-center touch-none select-none [-webkit-touch-callout:none]',
+                recording
+                  ? 'font-semibold text-destructive'
+                  : 'text-muted-foreground',
+              )}
+              oncontextmenu={e => e.preventDefault()}
+              onpointerdown={e => {
+                // Capture the pointer so pointerup fires even if the finger
+                // drifts off the button; suppress the native long-press menu.
+                e.preventDefault()
+                try {
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                } catch {
+                  /* unsupported */
+                }
+                void startRecording()
               }}
-            ></textarea>
-          </div>
-        {/if}
+              onpointerup={() => void stopRecording()}
+              onpointercancel={() => void stopRecording()}
+            >
+              {recording ? `${t('releaseToSend')} · ${fmtDuration(voiceElapsed)}` : t('holdToTalk')}
+            </button>
+          {/if}
+        </div>
 
         <!-- Right: one morphing action circle — WHITE fill with a colored
              outline + colored glyph. While a turn RUNS the circle keeps its
