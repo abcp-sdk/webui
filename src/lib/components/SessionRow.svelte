@@ -24,6 +24,7 @@
     isChild = false,
     onTap,
     onMenuRequest,
+    menuOpen = false,
     onToggleExpand,
   }: {
     session: Session
@@ -37,9 +38,13 @@
     expanded?: boolean
     isChild?: boolean
     onTap?: () => void
-    /** Open the row's context menu at a pointer point (right-click or
-     *  long-press). Null disables it (e.g. select mode). */
-    onMenuRequest?: ((pt: { x: number; y: number }) => void) | null
+    /** Open the row's context menu. Receives the ROW's viewport rect so the
+     *  menu anchors to this row (not the cursor) and the row can be
+     *  highlighted. Null disables it (e.g. select mode). */
+    onMenuRequest?: ((anchor: { top: number; bottom: number; left: number; right: number }) => void) | null
+    /** This row's context menu is open — highlight it so the target is
+     *  unambiguous. */
+    menuOpen?: boolean
     onToggleExpand?: () => void
   } = $props()
 
@@ -51,16 +56,19 @@
   let lpTimer: ReturnType<typeof setTimeout> | null = null
   let suppressTap = false
 
+  function rowAnchor(el: HTMLElement) {
+    const r = el.getBoundingClientRect()
+    return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }
+  }
+
   function lpStart(e: TouchEvent) {
     if (selectable || !onMenuRequest) return
-    const t = e.touches[0]
-    if (!t) return
-    const pt = { x: t.clientX, y: t.clientY }
+    const el = e.currentTarget as HTMLElement
     lpTimer = setTimeout(() => {
       lpTimer = null
       suppressTap = true
       navigator.vibrate?.(10)
-      onMenuRequest?.(pt)
+      onMenuRequest?.(rowAnchor(el))
     }, LP_MS)
   }
 
@@ -101,15 +109,21 @@
   type="button"
   class={cn(
     'flex w-full items-center px-3 py-2 text-left transition-colors select-none [-webkit-touch-callout:none]',
-    selected ? 'bg-primary/14' : isActive ? 'bg-primary/10' : 'hover:bg-muted/50',
+    selected
+      ? 'bg-primary/14'
+      : menuOpen
+        ? 'bg-muted'
+        : isActive
+          ? 'bg-primary/10'
+          : 'hover:bg-muted/50',
   )}
   onclick={onTap}
   oncontextmenu={e => {
-    // Desktop right-click: open the context menu AT the cursor instead of
-    // the browser's own menu.
+    // Desktop right-click: open the ROW-anchored context menu instead of the
+    // browser's own.
     if (onMenuRequest && !selectable) {
       e.preventDefault()
-      onMenuRequest({ x: e.clientX, y: e.clientY })
+      onMenuRequest(rowAnchor(e.currentTarget as HTMLElement))
     }
   }}
   ontouchstart={lpStart}

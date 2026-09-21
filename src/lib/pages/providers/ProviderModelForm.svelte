@@ -9,6 +9,7 @@
   import { capabilityLabelKey } from './common'
   import { AppIcons } from '$lib/icons'
   import CapabilityIcon from './CapabilityIcon.svelte'
+  import PageHeader from '$lib/components/layout/PageHeader.svelte'
 
   let { store, showBack = false, modelId = null }: PageProps & { modelId?: string | null } = $props()
 
@@ -104,13 +105,9 @@
   </div>
 {:else}
   <div class="flex h-full w-full flex-col">
-    <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
-      {#if showBack}
-        <button type="button" class="rounded p-1.5 hover:bg-muted" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
-      {/if}
-      <span class="text-sm font-semibold">{isEdit ? t('editModel') : t('addModel')}</span>
+    <PageHeader title={isEdit ? t('editModel') : t('addModel')} onBack={showBack ? () => store.popPage() : null}>
       <button type="button" class="ml-auto text-sm text-primary disabled:opacity-40" disabled={!canSave} onclick={save}>{t('save')}</button>
-    </header>
+    </PageHeader>
 
     <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
       <label class="block">

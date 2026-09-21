@@ -9,7 +9,11 @@
   import { sessionName } from '$lib/models'
   import SessionRow from '$lib/components/SessionRow.svelte'
   import ContextMenu, { type ContextMenuItem } from '$lib/components/ContextMenu.svelte'
-  import { cn } from '$lib/utils'
+  import type { MenuAnchor } from '$lib/context-menu-position'
+  import PageHeader from '$lib/components/layout/PageHeader.svelte'
+  import IconButton from '$lib/components/layout/IconButton.svelte'
+  import SectionLabel from '$lib/components/layout/SectionLabel.svelte'
+  import EmptyState from '$lib/components/layout/EmptyState.svelte'
   import { AppIcons } from '$lib/icons'
 
   let { store }: PageProps = $props()
@@ -131,12 +135,15 @@
     }
   }
 
-  // Row context menu (desktop right-click / mobile long-press), anchored at
-  // the pointer point.
-  let rowMenu = $state<{ sid: string; x: number; y: number } | null>(null)
+  // Row context menu (desktop right-click / mobile long-press). Anchored to
+  // the ROW (not the raw cursor point): the menu is vertically centred on the
+  // row and right-aligned to its trailing edge, and the source row is
+  // highlighted while open — with dozens of near-identical rows a cursor
+  // anchor gives no clue which session the menu acts on.
+  let rowMenu = $state<{ sid: string; anchor: MenuAnchor } | null>(null)
 
-  function openRowMenu(sid: string, pt: { x: number; y: number }) {
-    rowMenu = { sid, ...pt }
+  function openRowMenu(sid: string, anchor: MenuAnchor) {
+    rowMenu = { sid, anchor }
   }
 
   const rowMenuItems = $derived.by(() => {
@@ -195,39 +202,38 @@
 </script>
 
 <div class="flex h-full w-full flex-col">
-  <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
+  <PageHeader>
     {#if selectMode}
-      <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('cancel')} onclick={exitSelect}><AppIcons.close class="size-[18px]" /></button>
-      <span class="flex-1 truncate text-sm font-semibold">{t('selectedCount', { n: selected.size })}</span>
-      <button type="button" class="rounded p-1.5 hover:bg-muted" title={t('selectAll')} onclick={toggleAll}><AppIcons.list class="size-[18px]" /></button>
-      <button
-        type="button"
-        class={cn('rounded p-1.5 hover:bg-muted', selected.size ? 'text-destructive' : 'text-muted-foreground')}
-        title={t('delete')}
-        onclick={() => void deleteSelected()}
+      <IconButton icon={AppIcons.close} label={t('cancel')} onclick={exitSelect} />
+      <span class="min-w-0 flex-1 truncate text-base font-semibold">{t('selectedCount', { n: selected.size })}</span>
+      <IconButton icon={AppIcons.list} label={t('selectAll')} onclick={toggleAll} />
+      <IconButton
+        icon={AppIcons.delete}
+        label={t('delete')}
+        variant={selected.size ? 'destructive' : 'ghost'}
         disabled={!selected.size}
-      ><AppIcons.delete class="size-[18px]" /></button>
+        onclick={() => void deleteSelected()}
+      />
     {:else if searching}
-      <button
-        type="button"
-        class="rounded p-1.5 hover:bg-muted"
+      <IconButton
+        icon={AppIcons.back}
         onclick={() => {
           q = ''
           searching = false
         }}
-      ><AppIcons.back class="size-[18px]" /></button>
+      />
       <input
         bind:value={q}
         class="h-9 min-w-0 flex-1 bg-transparent px-2 text-sm outline-none"
         placeholder={t('searchHint')}
       />
     {:else}
-      <span class="flex-1 truncate text-sm font-semibold">{t('tabChat')}</span>
-      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('search')} onclick={() => (searching = true)}><AppIcons.search class="size-[18px]" /></button>
-      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('selectSessions')} onclick={() => (selectMode = true)}><AppIcons.list class="size-[18px]" /></button>
-      <button type="button" class="rounded p-1.5 text-primary hover:bg-muted" title={t('newSession')} onclick={() => void create()}><AppIcons.add class="size-[18px]" /></button>
+      <span class="min-w-0 flex-1 truncate text-base font-semibold">{t('tabChat')}</span>
+      <IconButton icon={AppIcons.search} label={t('search')} variant="primary" onclick={() => (searching = true)} />
+      <IconButton icon={AppIcons.list} label={t('selectSessions')} variant="primary" onclick={() => (selectMode = true)} />
+      <IconButton icon={AppIcons.add} label={t('newSession')} variant="primary" onclick={() => void create()} />
     {/if}
-  </header>
+  </PageHeader>
 
   {#if store.sessionError}
     <div class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-meta text-destructive">
@@ -235,10 +241,7 @@
     </div>
   {/if}
 
-  <!-- Flutter keeps this label verbatim (no uppercase). -->
-  <div class="px-4 pt-4 pb-1 text-micro font-semibold tracking-wider text-muted-foreground">
-    {t('recent')}
-  </div>
+  <SectionLabel class="normal-case">{t('recent')}</SectionLabel>
 
   <div
     class="min-h-0 flex-1 overflow-y-auto"
@@ -247,7 +250,7 @@
     ontouchmove={onTouchMove}
   >
     {#if display.length === 0}
-      <div class="p-4 text-center text-meta text-muted-foreground">{t('noSessions')}</div>
+      <EmptyState>{t('noSessions')}</EmptyState>
     {:else}
       {#each display as s (s.id)}
         {@const isChild = !searching && !!s.group && filtered.some(x => x.id === s.group)}
@@ -264,13 +267,14 @@
           isChild={isChild}
           onToggleExpand={() => toggleExpand(s.id)}
           onTap={() => (selectMode ? toggle(s.id) : store.pickSession(s.id))}
-          onMenuRequest={selectMode ? null : pt => openRowMenu(s.id, pt)}
+          menuOpen={rowMenu?.sid === s.id}
+          onMenuRequest={selectMode ? null : anchor => openRowMenu(s.id, anchor)}
         />
       {/each}
     {/if}
   </div>
 
   {#if rowMenu}
-    <ContextMenu x={rowMenu.x} y={rowMenu.y} items={rowMenuItems} onPick={v => void onRowMenuPick(v)} onClose={() => (rowMenu = null)} />
+    <ContextMenu anchor={rowMenu.anchor} items={rowMenuItems} onPick={v => void onRowMenuPick(v)} onClose={() => (rowMenu = null)} />
   {/if}
 </div>

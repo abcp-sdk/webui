@@ -15,6 +15,7 @@
   import { modelRefOf, sessionName } from '$lib/models'
   import { VoiceRecorder } from '$lib/voice'
   import { cn } from '$lib/utils'
+  import IconButton from '$lib/components/layout/IconButton.svelte'
   import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '$lib/components/ui/dropdown-menu'
   import { Popover } from '$lib/components/ui/popover'
   import { Select } from '$lib/components/ui/select'
@@ -569,7 +570,7 @@
     <!-- top bar -->
     <header class="relative flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
       <div class="flex min-w-0 items-center gap-2">
-        <button type="button" class="rounded p-1.5 hover:bg-muted" aria-label="back" onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
+        <IconButton icon={AppIcons.back} label={t('back')} onclick={() => store.popPage()} />
         <span class={cn('size-2 rounded-full', ctrl.sending ? 'bg-warning' : 'bg-success')}></span>
         {#if ctxLabel}
           <span class="text-micro text-muted-foreground tabular-nums">{ctxLabel}</span>
@@ -588,21 +589,14 @@
       <div class="ml-auto flex items-center gap-0.5">
         <!-- Mailbox, extracted from the ⋯ menu into its own button. The red
              dot (top-right) counts PENDING (unconsumed) mailbox entries. -->
-        <button
-          type="button"
-          bind:this={mailboxBtnEl}
-          class="relative rounded p-1.5 text-muted-foreground hover:bg-muted"
-          title={t('mailbox')}
-          aria-label={t('mailbox')}
-          onclick={() => void menuAction('mailbox')}
-        >
-          <AppIcons.inbox class="size-[18px]" />
+        <div bind:this={mailboxBtnEl} class="relative">
+          <IconButton icon={AppIcons.inbox} label={t('mailbox')} onclick={() => void menuAction('mailbox')} />
           {#if (ctrl?.pendingMailbox ?? 0) > 0}
-            <span class="absolute top-0.5 right-0.5 flex min-w-[14px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] leading-[14px] font-bold text-destructive-foreground">
+            <span class="pointer-events-none absolute top-0.5 right-0.5 flex min-w-[14px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] leading-[14px] font-bold text-destructive-foreground">
               {ctrl?.pendingMailbox}
             </span>
           {/if}
-        </button>
+        </div>
         <DropdownMenu label={t('settingsTitle')}>
           <DropdownMenuItem onSelect={() => void menuAction('compact')}>{t('compactHistory')}</DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void menuAction('fork')}>{t('fork')}</DropdownMenuItem>

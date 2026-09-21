@@ -7,6 +7,8 @@
   import { t } from '$lib/i18n.svelte'
   import type { MailboxEntry } from '$lib/models'
   import { cn } from '$lib/utils'
+  import PageHeader from '$lib/components/layout/PageHeader.svelte'
+  import EmptyState from '$lib/components/layout/EmptyState.svelte'
   import { AppIcons } from '$lib/icons'
 
   let { store }: PageProps = $props()
@@ -113,14 +115,14 @@
 </script>
 
 <div class="flex h-full w-full flex-col">
-  <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
-    <button type="button" class="rounded p-1.5 hover:bg-muted" aria-label={t('back')} onclick={() => store.popPage()}><AppIcons.back class="size-[18px]" /></button>
-    <AppIcons.inbox class="size-[18px] text-muted-foreground" />
-    <span class="text-sm font-semibold">{t('mailbox')}</span>
+  <PageHeader title={t('mailbox')} onBack={() => store.popPage()}>
+    {#snippet leading()}
+      <AppIcons.inbox class="size-[18px] text-muted-foreground" />
+    {/snippet}
     {#if entries.length}
       <span class="ml-auto rounded-full bg-muted px-2 py-0.5 text-micro text-muted-foreground tabular-nums">{entries.length}</span>
     {/if}
-  </header>
+  </PageHeader>
   <div bind:this={scrollEl} class="min-h-0 flex-1 overflow-y-auto p-3" onscroll={onScroll}>
     {#if loading}
       <div class="flex justify-center py-8">
@@ -129,10 +131,12 @@
     {:else if error}
       <p class="text-meta text-destructive">{error}</p>
     {:else if entries.length === 0}
-      <div class="flex flex-col items-center gap-2 py-12 text-muted-foreground">
-        <AppIcons.inbox class="size-8 opacity-40" />
-        <p class="text-meta">{t('noMessages')}</p>
-      </div>
+      <EmptyState center>
+        <span class="flex flex-col items-center gap-2">
+          <AppIcons.inbox class="size-8 opacity-40" />
+          <span>{t('noMessages')}</span>
+        </span>
+      </EmptyState>
     {:else}
       <div class="space-y-2">
         {#each entries as e (e.id)}

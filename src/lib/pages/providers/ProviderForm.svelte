@@ -11,6 +11,7 @@
   import CapabilityIcon from './CapabilityIcon.svelte'
   import { apiTypeLabelKey, apiTypesForCapability, capabilityLabelKey } from './common'
   import ModelRow from './ModelRow.svelte'
+  import PageHeader from '$lib/components/layout/PageHeader.svelte'
 
   let { store, showBack = false }: PageProps = $props()
 
@@ -138,19 +139,15 @@
   </div>
 {:else}
   <div class="flex h-full w-full flex-col">
-    <header class="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
-      {#if showBack}
-        <button
-          type="button"
-          class="rounded p-1.5 hover:bg-muted"
-          onclick={() => {
+    <PageHeader
+      title={draft.originalId ? t('settingsTitle') : t('addProvider')}
+      onBack={showBack
+        ? () => {
             store.endProviderDraft()
             store.popPage()
-          }}
-        ><AppIcons.back class="size-[18px]" /></button>
-      {/if}
-      <span class="text-sm font-semibold">{draft.originalId ? t('settingsTitle') : t('addProvider')}</span>
-    </header>
+          }
+        : null}
+    />
 
     <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
       <button

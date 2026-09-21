@@ -1,11 +1,14 @@
 <script lang="ts">
-  // ContextMenu — a small fixed-position menu opened AT a pointer point
-  // (desktop right-click on a session row / mobile long-press). Deliberately
-  // NOT the DropdownMenu primitive: that one anchors to a trigger element,
-  // while this must appear exactly where the pointer/finger was.
+  // ContextMenu — a small menu anchored to the ROW it acts on (desktop
+  // right-click / mobile long-press on a list item). Anchoring to the row
+  // rather than the raw pointer point is deliberate: with dozens of visually
+  // identical rows a cursor-positioned menu gives no clue which item it acts
+  // on, so the menu is vertically centred on the row, right-aligned to the
+  // row's trailing edge, and the caller highlights the source row while open.
   //
   // Closes on: item pick, outside pointerdown, Escape, any scroll, resize.
   // The position is clamped into the viewport after mount.
+  import { computeMenuPosition, type MenuAnchor } from '$lib/context-menu-position'
   import { cn } from '$lib/utils'
 
   export interface ContextMenuItem {
@@ -15,14 +18,12 @@
   }
 
   let {
-    x,
-    y,
+    anchor,
     items,
     onPick,
     onClose,
   }: {
-    x: number
-    y: number
+    anchor: MenuAnchor
     items: ContextMenuItem[]
     onPick: (value: string) => void
     onClose: () => void
@@ -30,37 +31,59 @@
 
   let el = $state<HTMLDivElement | null>(null)
 
-  // Clamp into the viewport once the real size is known. The menu never moves
-  // while open (it is remounted per open), so an imperative style update is
-  // enough — no reactive position state.
+  // Place once the menu's real size is known (and again whenever that size
+  // changes): right-aligned to the row's trailing edge, vertically centred on
+  // the row, clamped into the viewport. The size is not stable on first paint
+  // — the self-hosted CJK font can swap in after mount and change the text
+  // width, which would leave the menu a few px off the row's edge — so a
+  // ResizeObserver (+ fonts.ready) re-runs the placement instead of a one-shot
+  // measurement. The menu never MOVES by user action (it is remounted per
+  // open), so an imperative style update is enough — no reactive state.
   $effect(() => {
     if (!el) return
-    const r = el.getBoundingClientRect()
-    const px = Math.max(8, Math.min(x, window.innerWidth - r.width - 8))
-    const py = Math.max(8, Math.min(y, window.innerHeight - r.height - 8))
-    el.style.left = `${px}px`
-    el.style.top = `${py}px`
+    const node = el
+    const place = () => {
+      const r = node.getBoundingClientRect()
+      const { top, left } = computeMenuPosition(
+        anchor,
+        { width: r.width, height: r.height },
+        { width: window.innerWidth, height: window.innerHeight },
+      )
+      node.style.top = `${top}px`
+      node.style.left = `${left}px`
+    }
+    place()
+    const raf = requestAnimationFrame(place)
+    // Belt and braces: the natural width can settle one layout pass later
+    // (font swap / min-width), and ResizeObserver can miss the very first
+    // change on some engines — one delayed idempotent re-place converges.
+    const settle = setTimeout(place, 50)
+    const ro = new ResizeObserver(place)
+    ro.observe(node)
+    void document.fonts?.ready.then(place).catch(() => {})
+    return () => {
+      cancelAnimationFrame(raf)
+      clearTimeout(settle)
+      ro.disconnect()
+    }
   })
 
   function onWindowPointerdown(e: PointerEvent) {
     if (el && !el.contains(e.target as Node)) onClose()
-  }
-  function onScroll() {
-    onClose()
   }
 </script>
 
 <svelte:window
   onpointerdown={onWindowPointerdown}
   onkeydown={(e) => e.key === 'Escape' && onClose()}
-  onscroll={onScroll}
+  onscroll={onClose}
   onresize={onClose}
 />
 
 <div
   bind:this={el}
   class="fixed z-50 min-w-44 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
-  style="left:{x}px; top:{y}px"
+  style="top:0; left:0"
   role="menu"
 >
   {#each items as it (it.value)}
