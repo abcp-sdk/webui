@@ -5,12 +5,7 @@
 import type { AgentApi } from './api'
 import type { LocalStore } from './db'
 import type { StreamEvent } from './events'
-import {
-  compareMessages,
-  dropSupersededLocalAssistants,
-  orderMessages,
-  reanchorInFlightLocals,
-} from './message-order'
+import { compareMessages, orderMessages } from './message-order'
 import type { ChatMessage, ChatPart, Message, ToolState, UploadedFile } from './models'
 
 type SessionListener = (event: string, params: Record<string, unknown>) => void
@@ -44,12 +39,7 @@ export function mapMessagesToChat(msgs: Message[]): ChatMessage[] {
 }
 
 // Re-export the pure ordering helpers for callers that only import this module.
-export {
-  compareMessages,
-  dropSupersededLocalAssistants,
-  orderMessages,
-  reanchorInFlightLocals,
-}
+export { compareMessages, orderMessages }
 
 export class MessagesController {
   private api: AgentApi
@@ -73,7 +63,6 @@ export class MessagesController {
   private syncedOldestId = ''
 
   private streamAbort: AbortController | null = null
-  private streamingId: string | null = null
   /** Local ERROR bubbles are not server chain members; keep them across
    *  authoritative refreshes (mergeServer/fetchMessages) instead of dropping
    *  them. Cleared per session in init. */
@@ -88,11 +77,16 @@ export class MessagesController {
   private seenEids = new Set<string>()
   private activeRunId: string | null = null
   private awaitingRun = false
-  /** Message ids observed on the wire via `message-added` while a local send
-   *  was still awaiting its `accepted` id. Closes the race where the backend
-   *  persists + announces the prompt BEFORE the RPC response is processed:
-   *  `send()` consults this set when it learns the server id. */
-  private addedIds = new Set<string>()
+  /** Server-authored id of a message whose streaming step is in flight. The
+   *  delta router reads this; `message-added{streaming:true}` sets it, and a
+   *  new step (or turn end) replaces/clears it. */
+  private streamingId: string | null = null
+  /** Server-authored id of a prompt we sent whose `message-added{role:user}`
+   *  has not arrived yet. Cleared when that event lands (or the RPC fails). */
+  private pendingUserId: string | null = null
+  /** True from send() until `message-added{role:user}` confirms the write:
+   *  drives the composer spinner (the user bubble appears only then). */
+  awaitingSend = $state(false)
 
   private static MAX_RECONNECT = 10
   private static INITIAL_RECONNECT = 1000
@@ -193,23 +187,25 @@ export class MessagesController {
     }
   }
 
-  /** Enqueue the composer's text/attachments into the session mailbox WITHOUT
-   *  triggering a turn. Used while the session is RUNNING: the running turn
-   *  drains the mailbox at its next step boundary, so the message is delivered
-   *  in-order and the red badge reflects the pending count. */
+  /** Send a prompt (mailbox-only, whether the session is idle or busy). The
+   *  composer shows a spinner while `awaitingSend` is true (RPC in flight, then
+   *  waiting for the server's `message-added{role:user}` — the ONLY thing that
+   *  renders the user bubble). Never creates a client-optimistic row. */
   async deliver(text: string, attachments: UploadedFile[] = []): Promise<void> {
     const trimmed = text.trim()
     if (!trimmed && !attachments.length) return
     const codes = attachments.map(a => a.code)
-    await this.api.prompt(this.getSessionId(), trimmed, codes)
-    // The mailbox row is written by the agent's durable consumer, not by the
-    // RPC — poll briefly so the badge reflects the delivery without a manual
-    // refresh (and the running turn's drain will later decrement it).
-    await this.refreshMailbox()
-    for (let i = 0; i < 6; i++) {
-      await new Promise(r => setTimeout(r, 250))
-      await this.refreshMailbox()
-      if (this.pendingMailbox > 0) break
+    this.awaitingSend = true
+    this.notify()
+    try {
+      this.pendingUserId = await this.api.prompt(this.getSessionId(), trimmed, codes)
+      this.notify()
+    } catch (e) {
+      this.addError(this.sendFailedMsg(e))
+      this.awaitingSend = false
+      this.pendingUserId = null
+      this.notify()
+      throw e
     }
   }
 
@@ -281,52 +277,31 @@ export class MessagesController {
     }
   }
 
-  /** Merge a server delta into memory, keeping in-flight local bubbles. A
-   *  server message SUPERSEDES an optimistic bubble with the same id (the
-   *  real, persisted copy is authoritative), so the send spinner clears as
-   *  soon as the chain carries the message. */
+  /** Merge a server delta into memory. ASSISTANT messages are server-authored
+   *  (id and `prev_id` come from `message-added`), so a delta is an in-place
+   *  update by id — no client-side id invention, no anchor guessing. Local
+   *  error bubbles and the in-flight streamed bubble are preserved. */
   private mergeServer(msgs: Message[], tipId: string) {
-    const hasServer = msgs.length > 0
     const chat = mapMessagesToChat(msgs)
-    const serverIds = new Set(chat.map(m => m.id))
-    // Local-bubble id → the server id that superseded it. A local assistant
-    // placeholder chains onto its local user bubble; when that user bubble's
-    // server copy arrives, the placeholder's `prevId` must be re-pointed at
-    // the server id, otherwise its anchor dangles and it falls to a root.
-    const remap = new Map<string, string>()
+    // Preserve: local error bubbles, and the LIVE streamed bubble (the server
+    // copy of a step only lands AFTER its stream ends; until then the local
+    // streaming row is the only copy and must survive the merge).
+    const streaming = this.messages.find(m => m.isLocal && m.id === this.streamingId) ?? null
     const byId = new Map<string, ChatMessage>()
     for (const m of this.messages) {
-      if (!m.isLocal) {
-        byId.set(m.id, m)
-        continue
-      }
-      const serverId =
-        serverIds.has(m.id) ? m.id : (m.serverId != null && serverIds.has(m.serverId) ? m.serverId : null)
-      if (serverId !== null) {
-        remap.set(m.id, serverId)
-        continue // the persisted copy replaces this local bubble
-      }
-      const inFlight = m.status === 'streaming' || m.status === 'sending'
-      if (!hasServer || inFlight) byId.set(`local:${m.id}`, m)
+      if (m.isLocal) continue
+      byId.set(m.id, m)
     }
     for (const m of chat) byId.set(m.id, m)
-    for (const m of this.localErrors) byId.set(`local:${m.id}`, m)
-    const out = [...byId.values()]
-    // 1) Re-anchor a surviving local bubble whose parent was just superseded.
-    for (let i = 0; i < out.length; i++) {
-      const m = out[i]!
-      if (!m.isLocal) continue
-      const next = remap.get(m.prevId)
-      if (next !== undefined) out[i] = { ...m, prevId: next }
+    if (streaming !== null && !byId.has(streaming.id)) byId.set(streaming.id, streaming)
+    for (const m of this.localErrors) byId.set(`err:${m.id}`, m)
+    // Once the server holds the live step's id, the stream is over and the
+    // server row supersedes our local copy (drop the flag).
+    if (this.streamingId != null && byId.has(this.streamingId)) {
+      const s = byId.get(this.streamingId)!
+      if (!s.isLocal) this.streamingId = null
     }
-    // 2) Drop local assistant placeholders the server has now persisted. A
-    //    placeholder has no server id, so the id match above cannot remove it;
-    //    without this, the persisted copy and its placeholder coexist as
-    //    siblings and the list shuffles/duplicates on every reconcile.
-    const surviving = dropSupersededLocalAssistants(out, chat)
-    // 3) Serve in-flight local replies that SHOULD follow a newly-arrived
-    //    server user message (see [reanchorInFlightLocals]).
-    this.messages = reanchorInFlightLocals(surviving, chat)
+    this.messages = [...byId.values()]
     this.renumber()
     this.syncedTipId = tipId
   }
@@ -335,19 +310,6 @@ export class MessagesController {
   private renumber() {
     this.messages = orderMessages(this.messages)
     this.bumpSeqAfter(this.messages)
-  }
-
-  /**
-   * The id a NEW message should chain onto: the tail of the authoritative
-   * order (the last message after `orderMessages`), or '' when empty. Local
-   * optimistic bubbles use this as their `prevId` so they slot into the chain
-   * at the point they were created (right after the message they follow),
-   * instead of being pinned to the tail by server/local partitioning.
-   */
-  private chainTipId(): string {
-    if (this.messages.length === 0) return ''
-    const ordered = orderMessages(this.messages)
-    return ordered[ordered.length - 1]!.id
   }
 
   private async fetchMessages(before?: string) {
@@ -382,26 +344,13 @@ export class MessagesController {
   }
 
   private async recover() {
+    // A busy session is reconstructed from the stream itself: replay delivers
+    // the live step's `message-added{streaming:true}` (with its server id) plus
+    // its deltas, so no client-invented placeholder is needed here.
     try {
       const [status] = await this.api.state(this.getSessionId())
       if (status === 'busy' || status === 'running') {
         this.sending = true
-        if (!this.messages.some(m => m.status === 'streaming')) {
-          this.streamingId = `recover-${Date.now()}`
-          this.messages = [
-            ...this.messages,
-            {
-              id: this.streamingId,
-              role: 'assistant',
-              status: 'streaming',
-              parts: [],
-              createdAt: new Date().toISOString(),
-              isLocal: true,
-              prevId: this.chainTipId(),
-              seq: this.allocSeq(),
-            },
-          ]
-        }
         this.notify()
       }
     } catch {
@@ -514,12 +463,17 @@ export class MessagesController {
     }
   }
 
+  /** A run ended (or a new one began): drop any still-streaming local bubble.
+   *  Streamed assistant bubbles are server-authored (their id is a real server
+   *  id), so if the server already holds that row `mergeServer` keeps it; an
+   *  orphan (never persisted) is removed here. */
   private clearStreaming() {
-    this.streamingId = null
-    this.activeRunId = null
-    if (this.messages.some(m => m.status === 'streaming')) {
-      this.messages = this.messages.filter(m => m.status !== 'streaming')
+    if (this.streamingId != null) {
+      const id = this.streamingId
+      this.messages = this.messages.filter(m => !(m.isLocal && m.id === id))
+      this.streamingId = null
     }
+    this.activeRunId = null
   }
 
   private onStreamClosed(sid: string) {
@@ -590,18 +544,21 @@ export class MessagesController {
       }
     }
     const { event, params } = ev
+    // Every streamed part belongs to the assistant step named by its
+    // server-authored `message_id` (stamped by the agent on each part). Route
+    // by that id; never invent one.
+    const streamMsgId = (): string | null => {
+      const id = params['message_id']
+      return typeof id === 'string' && id !== '' ? id : this.streamingId
+    }
     switch (event) {
       case 'start-step':
       case 'text-start':
       case 'reasoning-start':
       case 'tool-input-start': {
-        const current = this.streamingId
-          ? this.messages.find(m => m.id === this.streamingId)
-          : null
-        const hasToolPart = current?.parts.some(p => p.type === 'tool') ?? false
-        const sid = this.ensureStreamingMsg(
-          event === 'start-step' || (event === 'text-start' && hasToolPart),
-        )
+        const sid = streamMsgId()
+        if (sid == null) break
+        this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
         if (event === 'text-start' && params['id'] != null) {
           this.ensurePart(sid, params['id'] as string, 'text')
         } else if (event === 'reasoning-start' && params['id'] != null) {
@@ -623,18 +580,24 @@ export class MessagesController {
       }
       case 'text-delta':
         if (params['id'] != null && params['text'] != null) {
-          const sid = this.ensureStreamingMsg(false)
+          const sid = streamMsgId()
+          if (sid == null) break
+          this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
           this.appendDelta(sid, params['id'] as string, String(params['text'] ?? ''), false)
         }
         break
       case 'reasoning-delta':
         if (params['id'] != null && params['text'] != null) {
-          const sid = this.ensureStreamingMsg(false)
+          const sid = streamMsgId()
+          if (sid == null) break
+          this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
           this.appendDelta(sid, `r${params['id']}`, String(params['text'] ?? ''), true)
         }
         break
       case 'tool-call': {
-        const sid = this.ensureStreamingMsg(false)
+        const sid = streamMsgId()
+        if (sid == null) break
+        this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
         const tcId = (params['toolCallId'] ?? params['id']) as string | undefined
         if (tcId != null) {
           this.addToolPart(
@@ -685,7 +648,9 @@ export class MessagesController {
         // `reasoning-file` are shown.
         const code = params['code'] as string | undefined
         if (code == null || code === '') break
-        const sid = this.ensureStreamingMsg(false)
+        const sid = streamMsgId()
+        if (sid == null) break
+        this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
         const partId = `f${code}`
         const existing = this.messages
           .find(m => m.id === sid)
@@ -731,48 +696,37 @@ export class MessagesController {
         void this.refreshMailbox()
         break
       case 'message-added': {
-        // A new message landed in the chain (mailbox-only write path). The
-        // event carries the persisted message id: if it matches an optimistic
-        // bubble of ours that is still 'sending', clear its spinner (success).
-        // Always pull the delta so the message appears without waiting for
-        // turn-complete; do NOT clearStreaming (orthogonal to any in-flight
-        // assistant turn).
-        const addedId = params['message_id']
-        if (typeof addedId === 'string' && addedId !== '') {
-          this.addedIds.add(addedId)
-          if (this.addedIds.size > 20000) this.addedIds.clear()
-          // Clear the spinner on our optimistic bubble: match by local id
-          // (already adopted) or by the recorded `serverId`. Stay `isLocal`
-          // and stamp `serverId` so the `reconcile` below drops this bubble in
-          // favour of the authoritative server copy (rather than rendering
-          // both), while the actions reappear immediately.
-          let matched = false
-          this.messages = this.messages.map(m => {
-            if (m.status === 'sending' && (m.id === addedId || m.serverId === addedId)) {
-              matched = true
-              return { ...m, status: 'complete' as const, serverId: addedId }
-            }
-            return m
-          })
-          // Fallback: the Prompt `accepted` response can be lost (stream drop)
-          // while the write still lands. If exactly one unmatched optimistic
-          // bubble is waiting, it must be this message — adopt it so the
-          // spinner cannot hang forever.
-          if (!matched) {
-            const waiting = this.messages.filter(
-              m => m.isLocal && m.role === 'user' && m.status === 'sending' && m.serverId == null,
-            )
-            if (waiting.length === 1) {
-              const localId = waiting[0]!.id
+        // The server authored this message's id and chain anchor. This is the
+        // ONLY place user bubbles are created (no client-side optimistic
+        // bubble): a user_prompt shows up here once the agent has drained the
+        // mailbox and written the chain row. `streaming:true` opens the
+        // assistant step's bubble; its deltas then arrive under the same id.
+        const addedId = typeof params['message_id'] === 'string' ? params['message_id'] : ''
+        const prevId = typeof params['prev_id'] === 'string' ? params['prev_id'] : ''
+        const role = typeof params['role'] === 'string' ? params['role'] : 'assistant'
+        const streaming = params['streaming'] === true
+        if (addedId !== '') {
+          if (streaming && role === 'assistant') {
+            // A new step begins: any PRIOR streaming bubble is done (the server
+            // persists one message per step and has moved on).
+            const prevStream = this.streamingId
+            if (prevStream != null && prevStream !== addedId) {
               this.messages = this.messages.map(m =>
-                m.id === localId
-                  ? { ...m, status: 'complete' as const, serverId: addedId }
+                m.id === prevStream && m.status === 'streaming'
+                  ? { ...m, status: 'complete' as const }
                   : m,
               )
             }
+            this.streamingId = addedId
+            this.ensureStreamingMsg(addedId, prevId)
+          } else if (role === 'user') {
+            this.upsertServerMessage(addedId, prevId, 'user')
+            // Our own send completed: stop the composer spinner.
+            this.awaitingSend = false
+            this.pendingUserId = null
           }
-          this.notify()
         }
+        this.notify()
         void this.reconcile()
         // A drained user_prompt is now CONSUMED, so the pending badge shrinks.
         void this.refreshMailbox()
@@ -814,23 +768,22 @@ export class MessagesController {
     }
   }
 
-  private ensureStreamingMsg(forceNew: boolean): string {
-    if (this.streamingId) {
-      const existing = this.messages.find(m => m.id === this.streamingId)
-      if (existing && (!forceNew || existing.parts.length === 0)) return this.streamingId
-      // A new step begins while the previous placeholder still has content:
-      // the previous step is DONE (the server persists one message per step),
-      // so finalize it instead of leaving a second `streaming` bubble behind.
-      // Without this, a multi-step turn accumulated zombie `streaming` bubbles
-      // (`assistant B streaming` stacked above `assistant A streaming`).
-      if (existing) {
-        const prevId = existing.id
-        this.messages = this.messages.map(m =>
-          m.id === prevId ? { ...m, status: 'complete' as const } : m,
-        )
-      }
+  /** Ensure a streamed assistant bubble exists under the SERVER-authored id.
+   *  No id is minted here; `id` comes from `message-added`/the delta's
+   *  `message_id`, and `prevId` is the server's `prev_id` (known at step
+   *  start). Reuses the existing bubble if present (a delta may arrive before
+   *  the formal `message-added{streaming:true}` on replay). */
+  private ensureStreamingMsg(id: string, prevId?: string): string {
+    const existing = this.messages.find(m => m.id === id)
+    if (existing) {
+      if (!existing.isLocal) return id
+      if (existing.status === 'streaming') return id
+      // Was finalized by a previous step's boundary; reopen it.
+      this.messages = this.messages.map(m =>
+        m.id === id ? { ...m, status: 'streaming' as const } : m,
+      )
+      return id
     }
-    const id = `m${Date.now()}`
     this.streamingId = id
     this.messages = [
       ...this.messages,
@@ -841,13 +794,30 @@ export class MessagesController {
         parts: [],
         createdAt: new Date().toISOString(),
         isLocal: true,
-        // Anchor to the current chain tail so the new step renders right after
-        // the step that just finished (not pinned to the list tail).
-        prevId: this.chainTipId(),
+        prevId: prevId ?? '',
         seq: this.allocSeq(),
       },
     ]
     return id
+  }
+
+  /** Create a minimal server-authored bubble (used for a user message whose
+   *  full body is fetched by the following `reconcile`). */
+  private upsertServerMessage(id: string, prevId: string, role: string): void {
+    if (this.messages.some(m => m.id === id)) return
+    this.messages = [
+      ...this.messages,
+      {
+        id,
+        role,
+        status: 'complete',
+        parts: [],
+        createdAt: new Date().toISOString(),
+        isLocal: false,
+        prevId,
+        seq: this.allocSeq(),
+      },
+    ]
   }
 
   private setMsg(id: string, fn: (m: ChatMessage) => ChatMessage) {
@@ -969,6 +939,12 @@ export class MessagesController {
     void this.reconcile()
   }
 
+  /** Resolve a server-authored id + anchor for a streamed bubble. Used by the
+   *  delta router; returns the id only when it is known server-side. */
+  private streamedId(): string | null {
+    return this.streamingId
+  }
+
   /** After a turn completes (or a message-added nudge), pull the server delta
    *  and adopt real ids. Works without a local store: the merge is in-memory
    *  and persistence is simply skipped. */
@@ -1005,81 +981,11 @@ export class MessagesController {
       isLocal: true,
       parts: [{ id: `p${now}`, type: 'text' as const, text, tool: '' }],
       createdAt: new Date().toISOString(),
-      prevId: this.chainTipId(),
+      prevId: '',
       seq: this.allocSeq(),
     }
     this.localErrors.push(err)
-    this.messages = [
-      ...this.messages.filter(m => m.status !== 'streaming'),
-      err,
-    ]
-    this.streamingId = null
-  }
-
-  async send(text: string, attachments: UploadedFile[] = []) {
-    const trimmed = text.trim()
-    if ((!trimmed && !attachments.length) || this.sending) return
-    this.sending = true
-    const codes = attachments.map(a => a.code)
-    const now = Date.now()
-    const userParts: ChatPart[] = [
-      ...attachments.map(a => ({
-        id: `f${a.code}`,
-        type: 'file',
-        text: '',
-        tool: '',
-        code: a.code,
-        name: a.name ?? null,
-        mime: a.mime ?? null,
-        size: a.size ?? null,
-      })),
-      ...(trimmed
-        ? [{ id: `p${now}`, type: 'text', text: trimmed, tool: '' }]
-        : []),
-    ]
-    const localId = `u${now}`
-    // Anchor the optimistic user bubble to the current chain tail, then the
-    // assistant placeholder anchors to the user bubble — so the pair renders
-    // in chain position rather than being pinned to the list tail.
-    const anchor = this.chainTipId()
-    this.messages = [
-      ...this.messages.filter(m => m.status !== 'streaming'),
-      {
-        id: localId,
-        role: 'user',
-        status: 'sending',
-        isLocal: true,
-        parts: userParts,
-        createdAt: new Date().toISOString(),
-        prevId: anchor,
-        seq: this.allocSeq(),
-      },
-    ]
-    this.ensureStreamingMsg(true)
-    this.notify()
-    try {
-      const messageId = await this.api.prompt(this.getSessionId(), trimmed, codes)
-      if (messageId) {
-        if (this.addedIds.has(messageId)) {
-          // The `message-added` event beat this RPC response and reconcile has
-          // already inserted the persisted copy — drop the optimistic bubble.
-          this.messages = this.messages.filter(m => m.id !== localId)
-        } else {
-          // Record the server id; the spinner KEEPS SPINNING until the backend
-          // `message-added` event confirms the write.
-          this.messages = this.messages.map(m =>
-            m.id === localId ? { ...m, serverId: messageId } : m,
-          )
-        }
-        this.notify()
-      }
-    } catch (e) {
-      // Drop the optimistic bubble: the send never landed.
-      this.messages = this.messages.filter(m => m.id !== localId)
-      this.addError(this.sendFailedMsg(e))
-      this.sending = false
-      this.notify()
-    }
+    this.messages = [...this.messages, err]
   }
 
   stop() {
@@ -1111,7 +1017,7 @@ export class MessagesController {
     this.clearStreaming()
     this.sending = false
     await this.fetchMessages()
-    await this.send(trimmed, codes.map(code => ({ code, name: null, mime: null } as UploadedFile)))
+    await this.deliver(trimmed, codes.map(code => ({ code, name: null, mime: null } as UploadedFile)))
   }
 
   async loadMore() {

@@ -155,27 +155,32 @@
   }
 
   // ---- sending ----
+  // ONE path for both idle and busy sessions: every prompt goes to the mailbox,
+  // and the user bubble is rendered ONLY when the server's message-added event
+  // arrives. The composer is locked (spinner) until then — `ctrl.awaitingSend`.
+  // While a turn is RUNNING the action circle shows an envelope; sending it
+  // plays a fly-to-mailbox animation.
 
-  // Uploads currently in flight (so send can await them all first).
+  // Uploads currently in flight (so submit can await them all first).
   const inflightUploads = new Set<Promise<void>>()
-  let sending = $state(false)
+  /** True while a submit is in progress (uploads awaited, RPC in flight). */
+  let submitting = $state(false)
+
+  const busyComposer = $derived(!!ctrl && (ctrl.sending || ctrl.awaitingSend))
 
   function canSend(): boolean {
-    return (!!text.trim() || attachments.some(a => a.code)) && !!(ctrl && !ctrl.sending)
+    return (!!text.trim() || attachments.some(a => a.code)) && !busyComposer
   }
 
-  // ---- deliver-to-mailbox (the running-session fourth action form) ----
-  // While a turn is RUNNING, typing text (or recording audio, which lands as an
-  // attachment) morphs the action circle into an ENVELOPE: sending enqueues the
-  // message into the session mailbox instead of prompting, and the running turn
-  // drains it at its next step boundary. A letter then flies to the top-bar
-  // mailbox button (whose red dot counts the pending entries).
+  // ---- deliver-to-mailbox animation ----
   let envelopeBtnEl: HTMLElement | null = $state(null)
   let mailboxBtnEl: HTMLElement | null = $state(null)
   let flyFrom = $state<{ x: number; y: number } | null>(null)
   let flyTo = $state<{ x: number; y: number } | null>(null)
   let flyEl: HTMLElement | null = $state(null)
 
+  /** True when the action should read as "deliver to mailbox" (busy session
+   *  with content to send). */
   function canDeliver(): boolean {
     return !!(ctrl?.sending && (text.trim() || attachments.length))
   }
@@ -220,59 +225,39 @@
     }
   })
 
-  async function deliver() {
-    if (!ctrl || sending) return
-    // Same all-or-nothing upload gate as send: never enqueue a partial batch.
-    if (inflightUploads.size) await Promise.allSettled([...inflightUploads])
-    const failed = attachments.filter(a => a.uploadState === 'error' || !a.code || a.code.startsWith('tmp-'))
-    if (failed.length) {
-      showErrorToast(t('uploadFailedRetry', { arg1: failed.length }))
-      return
+  async function submit() {
+    if (!ctrl || submitting || busyComposer) return
+    submitting = true
+    try {
+      // Wait for every in-flight upload before sending (never a partial batch).
+      if (inflightUploads.size) await Promise.allSettled([...inflightUploads])
+      const failed = attachments.filter(a => a.uploadState === 'error' || !a.code || a.code.startsWith('tmp-'))
+      if (failed.length) {
+        showErrorToast(t('uploadFailedRetry', { arg1: failed.length }))
+        return
+      }
+      const body = text
+      const files = attachments.filter(a => a.code)
+      // Capture the source rect BEFORE clearing the draft: clearing morphs the
+      // envelope button back to STOP and unmounts it.
+      if (canDeliver()) startFly()
+      text = ''
+      attachments = []
+      persistDraft()
+      // Mailbox-only: the composer stays busy until message-added confirms the
+      // write; the bubble is rendered by the server event, not optimistically.
+      await ctrl.deliver(body, files)
+    } catch {
+      /* error bubble already added by the controller */
+    } finally {
+      submitting = false
     }
-    const body = text
-    const files = attachments.filter(a => a.code)
-    // Capture the source rect BEFORE clearing the draft: clearing morphs the
-    // envelope button back to STOP and unmounts it.
-    startFly()
-    text = ''
-    attachments = []
-    persistDraft()
-    await ctrl.deliver(body, files)
-  }
-
-  async function send() {
-    if (!canSend() || !ctrl || sending) return
-    sending = true
-    // If any attachment is still uploading, wait for every in-flight upload to
-    // finish before sending (flutter _send).
-    if (inflightUploads.size) {
-      await Promise.allSettled([...inflightUploads])
-      if (ctrl.sending) { sending = false; return }
-    }
-    // ALL-or-NOTHING: refuse the send while any attachment lacks a server code
-    // (still uploading or failed) — never send a partial batch.
-    const failed = attachments.filter(a => a.uploadState === 'error' || !a.code || a.code.startsWith('tmp-'))
-    if (failed.length) {
-      sending = false
-      showErrorToast(t('uploadFailedRetry', { arg1: failed.length }))
-      return
-    }
-    const body = text
-    const files = attachments.filter(a => a.code)
-    text = ''
-    attachments = []
-    persistDraft()
-    sending = false
-    await ctrl.send(body, files)
   }
 
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
       e.preventDefault()
-      // While a turn is running, Enter DELIVERS to the mailbox instead of
-      // prompting (which would be refused by the running turn's lease).
-      if (canDeliver()) void deliver()
-      else void send()
+      void submit()
     }
   }
 
@@ -749,21 +734,26 @@
              STOP form; the moment the user types/records, it morphs into the
              ENVELOPE (deliver to mailbox). Otherwise: blue send / muted
              attach, never a solid colored fill. -->
-        {#if ctrl.sending && canDeliver()}
+        {#if ctrl.awaitingSend}
+          <!-- A prompt is en route to the mailbox (RPC then server confirm):
+               the composer is locked and shows a spinner until the user
+               bubble appears from the server's message-added event. -->
+          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span></button>
+        {:else if ctrl.sending && canDeliver()}
           <button
             type="button"
             bind:this={envelopeBtnEl}
             class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary"
             title={t('deliver')}
             aria-label={t('deliver')}
-            onclick={() => void deliver()}
+            onclick={() => void submit()}
           ><AppIcons.mail class="size-5" /></button>
         {:else if ctrl.sending}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-destructive bg-card text-destructive" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><AppIcons.stop class="size-5" /></button>
-        {:else if sending}
+        {:else if submitting}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span></button>
         {:else if canSend()}
-          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void send()}><AppIcons.send class="size-5" /></button>
+          <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void submit()}><AppIcons.send class="size-5" /></button>
         {:else}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground" title={t('attach')} aria-label={t('attach')} onclick={() => (attachOpen = true)}><AppIcons.add class="size-5" /></button>
         {/if}
