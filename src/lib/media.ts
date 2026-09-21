@@ -5,6 +5,8 @@
 // thumbnail (a separate small file) loader.
 import { thumbHashToDataURL } from 'thumbhash'
 import type { AgentApi } from './api'
+import { t } from './i18n.svelte'
+import { showErrorToast } from './toast.svelte'
 
 /** Cap on cached object URLs. Each entry can be tens of MB (video), so the
  *  cache is deliberately small and evicts the least-recently-used entry,
@@ -84,17 +86,52 @@ export function dropMediaUrl(code: string) {
   inflight.delete(code)
 }
 
-/** Save-as download of a file code (download_service_web.dart). */
-export async function downloadFile(api: AgentApi, code: string, name: string) {
-  const blob = await api.fetchFileBlob(code)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name || code
-  document.body.append(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+/**
+ * Save-as download of a file code (download_service_web.dart).
+ *
+ * Streams the bytes (GetFileStream) instead of the unary GetFile: the whole
+ * file never has to fit one RPC message, progress can be reported, and the
+ * blob is built once (a unary response is buffered by the transport AND again
+ * by the Blob). Falls back to the unary fetch when the server build has no
+ * streaming method, so an older agent still downloads correctly.
+ *
+ * Returns a result instead of throwing: every caller is a fire-and-forget UI
+ * action, and the previous implementation's silent rejection is exactly why a
+ * failed click looked like "nothing happens".
+ */
+export async function downloadFile(
+  api: AgentApi,
+  code: string,
+  name: string,
+  opts: {
+    mime?: string | null
+    onProgress?: (done: number, total: number) => void
+  } = {},
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  let blob: Blob
+  try {
+    try {
+      blob = await api.streamFileBlob(code, opts.mime ?? '', opts.onProgress)
+    } catch {
+      // Streaming unavailable (e.g. a server without GetFileStream).
+      blob = await api.fetchFileBlob(code)
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+  try {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name || code
+    document.body.append(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) }
+  }
+  return { ok: true }
 }
 
 export function mimeToKind(
@@ -389,4 +426,23 @@ export function formatBytes(size?: number | null): string {
     i++
   }
   return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`
+}
+
+/**
+ * Download with user-visible feedback: for use directly from a click handler.
+ * Shows a toast on failure (the card previously swallowed errors, so a failed
+ * click was indistinguishable from a no-op) and returns whether it succeeded.
+ */
+export async function downloadWithFeedback(
+  api: AgentApi,
+  code: string,
+  name: string,
+  opts: {
+    mime?: string | null
+    onProgress?: (done: number, total: number) => void
+  } = {},
+): Promise<boolean> {
+  const r = await downloadFile(api, code, name, opts)
+  if (!r.ok) showErrorToast(`${t('downloadFailed')}: ${r.error}`)
+  return r.ok
 }

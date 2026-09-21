@@ -146,6 +146,9 @@ export interface UploadedFile {
   localPath: string
   uploadState: UploadState
   error?: string | null
+  /** Upload progress 0..100 while `uploadState === 'uploading'`; -1 when the
+   *  total is not yet known. Byte-level (XHR upload progress), not a timer. */
+  uploadPct?: number | null
 }
 
 export function isUploading(f: UploadedFile): boolean {

@@ -1,5 +1,11 @@
 // AgentApi — a faithful port of flutter/lib/api.dart over the latest
 // @abcp/agent-sdk (codegenv2: Struct→JsonObject, int64→bigint).
+
+import {
+  IngestFileRequestSchema,
+  IngestFileResponseSchema,
+} from '@abcp/agent-sdk'
+import { create, fromBinary, toBinary } from '@bufbuild/protobuf'
 import type { AgentClient } from './agent'
 import { createAgentClient } from './agent'
 import {
@@ -222,6 +228,83 @@ export function messageFromPb(m: PbMessage): Message {
   }
 }
 
+/**
+ * Connect-unary POST of a pre-serialised protobuf message with upload
+ * progress. `Content-Type: application/proto` + a bare message body is exactly
+ * what the Connect binary unary protocol is; success returns the response
+ * message (also bare protobuf), a Connect error is surfaced as an Error.
+ *
+ * Falls back to `fallback()` when XHR progress is unusable (no
+ * XMLHttpRequest, or the transport refuses the hand-rolled request), so the
+ * upload itself can never regress just because progress is unavailable.
+ */
+function uploadIngest(
+  baseUrl: string,
+  token: string,
+  body: Uint8Array,
+  onProgress: ((done: number, total: number) => void) | undefined,
+  fallback: () => Promise<{ code: string; mime: string }>,
+): Promise<{ code: string; mime: string }> {
+  if (typeof XMLHttpRequest === 'undefined' || onProgress === undefined) {
+    return fallback()
+  }
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    let settled = false
+    const useFallback = () => {
+      if (settled) return
+      settled = true
+      fallback().then(resolve, reject)
+    }
+    try {
+      xhr.open('POST', `${baseUrl}/agent.v1.AgentService/IngestFile`, true)
+      xhr.responseType = 'arraybuffer'
+      xhr.setRequestHeader('Content-Type', 'application/proto')
+      xhr.setRequestHeader('Connect-Protocol-Version', '1')
+      if (token !== '') xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    } catch {
+      useFallback()
+      return
+    }
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) onProgress(e.loaded, e.total)
+    }
+    xhr.onerror = () => useFallback()
+    xhr.ontimeout = () => useFallback()
+    xhr.onload = () => {
+      if (settled) return
+      if (xhr.status >= 200 && xhr.status < 300) {
+        settled = true
+        try {
+          const msg = fromBinary(
+            IngestFileResponseSchema,
+            new Uint8Array(xhr.response as ArrayBuffer),
+          )
+          resolve({ code: msg.code, mime: msg.mime })
+        } catch (e) {
+          reject(e)
+        }
+        return
+      }
+      // A protocol-level refusal (auth/validation): surface it as an error
+      // rather than silently retrying through the fallback transport.
+      settled = true
+      reject(
+        new Error(
+          `upload failed: HTTP ${xhr.status} ${
+            xhr.response instanceof ArrayBuffer
+              ? new TextDecoder().decode(new Uint8Array(xhr.response))
+              : ''
+          }`.trim(),
+        ),
+      )
+    }
+    // Copy into a plain ArrayBuffer to satisfy the XHR body types (TS models
+    // Uint8Array's buffer as ArrayBufferLike, which may be a SharedArrayBuffer).
+    xhr.send(body.slice().buffer)
+  })
+}
+
 // ---- the facade ----
 
 export interface AgentApiEvents {
@@ -335,16 +418,42 @@ export class AgentApi {
 
   // ---- attachment upload / download ----
 
-  async uploadFile(src: UploadedFileSource): Promise<UploadedFile> {
+  /**
+   * Upload a file's bytes (IngestFile) reporting REAL byte-level progress.
+   *
+   * The Connect client has no upload-progress hook (fetch cannot report
+   * request-body progress), so this issues the equivalent Connect-UNARY
+   * request by hand with XMLHttpRequest: `Content-Type: application/proto`
+   * plus the bare protobuf message body — byte-for-byte what
+   * `createConnectTransport(useBinaryFormat: true)` sends for a unary call.
+   * `xhr.upload.onprogress` then gives true `loaded/total` (including the
+   * client's own send buffer), which is what makes the attachment tile's
+   * "42%" honest rather than a fake timer. Falls back to the typed client
+   * where XHR upload progress is unavailable.
+   *
+   * No mime is sent: the agent derives the authoritative type from the bytes.
+   */
+  async uploadFile(
+    src: UploadedFileSource,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<UploadedFile> {
     const bytes = src.bytes
     if (!bytes?.length) throw new Error(`attachment has no bytes: ${src.name}`)
-    // No mime is sent: the agent derives the content type from the bytes and
-    // returns the authoritative value, which we adopt for local rendering.
-    const r = await this._c.ingestFile({ data: bytes, name: src.name })
+    const req = toBinary(
+      IngestFileRequestSchema,
+      create(IngestFileRequestSchema, { data: bytes, name: src.name }),
+    )
+    const out = await uploadIngest(
+      this.baseUrl,
+      this.token,
+      req,
+      onProgress,
+      () => this._c.ingestFile({ data: bytes, name: src.name }),
+    )
     return {
-      code: r.code,
+      code: out.code,
       name: src.name,
-      mime: r.mime || src.mimeType,
+      mime: out.mime || src.mimeType,
       size: bytes.length,
       deduped: false,
       localPath: '',

@@ -104,7 +104,17 @@
     const id = sid
     const d = untrack(() => store.chatDrafts[id])
     text = d?.text ?? ''
-    attachments = d?.attachments ?? []
+    // RESTORE DEFENSIVELY: a draft persisted before dedupe-by-code existed can
+    // list the same file twice. Two entries sharing a code collide on the
+    // composer's {#each} key and Svelte throws each_key_duplicate, which kills
+    // the whole pane render. Also drop dead blob: URLs (from a previous load)
+    // so the tile falls back to the server thumbnail.
+    const seen = new Set<string>()
+    attachments = (d?.attachments ?? [])
+      .filter(a => (seen.has(a.code) ? false : (seen.add(a.code), true)))
+      .map(a =>
+        a.localPath?.startsWith('blob:') ? { ...a, localPath: '' } : a,
+      )
   })
 
   async function loadMeta() {
@@ -322,8 +332,32 @@
     // pending` check would never fire — the tile stayed "uploading" forever.
     const job = (async () => {
       try {
-        const done = await store.api.uploadFile({ path: '', name: src.name, mimeType: src.mimeType, bytes: src.bytes })
-        attachments = attachments.map(a => (a.code === localKey ? done : a))
+        // Real byte-level progress (XHR upload), so the tile can show a true
+        // percentage instead of a spinner for large uploads.
+        const done = await store.api.uploadFile(
+          { path: '', name: src.name, mimeType: src.mimeType, bytes: src.bytes },
+          (d, total) => {
+            const pct = total > 0 ? Math.round((d / total) * 100) : -1
+            attachments = attachments.map(a =>
+              a.code === localKey && a.uploadState === 'uploading'
+                ? { ...a, uploadPct: pct }
+                : a,
+            )
+          },
+        )
+        const finished = { ...done, localPath: localUrls[localKey] ?? '' }
+        if (localUrls[localKey] !== undefined) {
+          // Re-key the object URL onto the server code so it is revocable and
+          // the persisted draft references a stable key.
+          localUrls[finished.code] = localUrls[localKey]!
+          delete localUrls[localKey]
+        }
+        // DEDUPE BY CODE: the agent returns the SAME code for identical bytes,
+        // so re-picking a file already in the list must not create a second
+        // entry — two entries sharing a code also break the keyed {#each}.
+        attachments = attachments.some(a => a.code === finished.code)
+          ? attachments.filter(a => a.code !== localKey)
+          : attachments.map(a => (a.code === localKey ? finished : a))
       } catch (e) {
         attachments = attachments.map(a =>
           a.code === localKey ? { ...a, uploadState: 'error', error: String(e) } : a,
@@ -667,7 +701,7 @@
     <div class="shrink-0 border-t border-border bg-card px-3 pt-1 pb-1">
       {#if attachments.length}
         <div class="mb-2 flex flex-wrap gap-1 pt-1">
-          {#each attachments as a (a.code + a.name)}
+          {#each attachments as a (a.code)}
             <div class="relative">
               <MediaAttachment
                 api={store.api}
@@ -676,7 +710,7 @@
                 mime={a.mime}
                 size={a.size ?? null}
                 dimension={tileDim}
-                localUrl={a.uploadState !== 'done' ? isLocalPreview(a) : ''}
+                localUrl={isLocalPreview(a)}
               />
               <button
                 type="button"
@@ -689,7 +723,10 @@
                 onclick={() => (a.uploadState === 'error' ? void retryUpload(a) : removeAttachment(a))}
                 title={a.uploadState === 'error' ? t('retry') : t('delete')}
               >
-                {#if a.uploadState === 'uploading'}<span class="block size-2.5 animate-spin rounded-full border border-white/40 border-t-white"></span>{:else if a.uploadState === 'error'}<AppIcons.refresh class="size-2.5" />{:else}<AppIcons.close class="size-2.5" />{/if}
+                {#if a.uploadState === 'uploading' && a.uploadPct != null && a.uploadPct >= 0}
+                  <!-- True byte progress beats an indeterminate spinner. -->
+                  <span class="text-[9px] font-semibold tabular-nums">{a.uploadPct}%</span>
+                {:else if a.uploadState === 'uploading'}<span class="block size-2.5 animate-spin rounded-full border border-white/40 border-t-white"></span>{:else if a.uploadState === 'error'}<AppIcons.refresh class="size-2.5" />{:else}<AppIcons.close class="size-2.5" />{/if}
               </button>
             </div>
           {/each}

@@ -47,7 +47,11 @@ describe('computeMenuPosition (row-anchored context menu)', () => {
   it('keeps a deterministic (top-left) position when the menu exceeds the viewport', () => {
     const tiny = { width: 120, height: 90 }
     const row = { top: 50, bottom: 80, left: 0, right: 100 }
-    const { top, left } = computeMenuPosition(row, { width: 300, height: 200 }, tiny)
+    const { top, left } = computeMenuPosition(
+      row,
+      { width: 300, height: 200 },
+      tiny,
+    )
     expect(top).toBe(8)
     expect(left).toBe(8)
   })
