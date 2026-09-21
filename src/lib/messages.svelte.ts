@@ -81,11 +81,9 @@ export class MessagesController {
    *  delta router reads this; `message-added{streaming:true}` sets it, and a
    *  new step (or turn end) replaces/clears it. */
   private streamingId: string | null = null
-  /** Server-authored id of a prompt we sent whose `message-added{role:user}`
-   *  has not arrived yet. Cleared when that event lands (or the RPC fails). */
-  private pendingUserId: string | null = null
-  /** True from send() until `message-added{role:user}` confirms the write:
-   *  drives the composer spinner (the user bubble appears only then). */
+  /** True while a send RPC is in flight (from submit to `accepted`). Drives the
+   *  composer spinner only; the user bubble itself appears from the server's
+   *  `message-added` event. */
   awaitingSend = $state(false)
 
   private static MAX_RECONNECT = 10
@@ -187,10 +185,16 @@ export class MessagesController {
     }
   }
 
-  /** Send a prompt (mailbox-only, whether the session is idle or busy). The
-   *  composer shows a spinner while `awaitingSend` is true (RPC in flight, then
-   *  waiting for the server's `message-added{role:user}` — the ONLY thing that
-   *  renders the user bubble). Never creates a client-optimistic row. */
+  /** Send a prompt (mailbox-only, whether the session is idle or busy).
+   *
+   *  The composer spins only while the send RPC is in flight; it stops as soon
+   *  as the server ACCEPTS the prompt, i.e. the message is durably enqueued in
+   *  the mailbox. It must NOT wait for `message-added{role:user}`: the agent
+   *  only persists the row when the running turn next drains the mailbox (a
+   *  step boundary), which can be minutes into a long model call or tool — the
+   *  send is already complete at `accepted`. The user bubble still appears from
+   *  `message-added` (server-driven id/position); never a client-optimistic
+   *  row. */
   async deliver(text: string, attachments: UploadedFile[] = []): Promise<void> {
     const trimmed = text.trim()
     if (!trimmed && !attachments.length) return
@@ -198,12 +202,13 @@ export class MessagesController {
     this.awaitingSend = true
     this.notify()
     try {
-      this.pendingUserId = await this.api.prompt(this.getSessionId(), trimmed, codes)
+      // Resolves on the server's `accepted` event = durably in the mailbox.
+      await this.api.prompt(this.getSessionId(), trimmed, codes)
+      this.awaitingSend = false
       this.notify()
     } catch (e) {
       this.addError(this.sendFailedMsg(e))
       this.awaitingSend = false
-      this.pendingUserId = null
       this.notify()
       throw e
     }
@@ -720,10 +725,10 @@ export class MessagesController {
             this.streamingId = addedId
             this.ensureStreamingMsg(addedId, prevId)
           } else if (role === 'user') {
+            // The prompt was persisted into the chain: render the user bubble
+            // with the server-authored id/position. (The composer spinner is
+            // unrelated — it already stopped at `accepted`.)
             this.upsertServerMessage(addedId, prevId, 'user')
-            // Our own send completed: stop the composer spinner.
-            this.awaitingSend = false
-            this.pendingUserId = null
           }
         }
         this.notify()
