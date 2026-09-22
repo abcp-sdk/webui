@@ -193,37 +193,43 @@
   </div>
 {:else}
   <div class={cn('mb-3 flex flex-col', isSystem ? 'items-center' : isOwn ? 'items-end' : 'items-start')}>
-    <!-- Avatars live on the LEFT only: the assistant reply and a session
-         hand-off both show a 28px avatar to the left of the bubble; the
-         reader's OWN prompt has none. Avatar + bubble are centre-aligned. -->
-    <div class="flex max-w-full items-center gap-2">
+    <!-- Avatars live ABOVE the bubble, flush to the left edge: the assistant
+         reply and a session hand-off each show a 28px avatar on its own row
+         above the bubble; the reader's OWN prompt has none. The bubble below
+         stays left-aligned (incoming) / right-aligned (own). -->
+    {#if showAvatar}
+      <div class="mb-1 flex w-full items-center">
+        {#if canOpenSession}
+          <!-- Session hand-off: the SOURCE session's avatar jumps to it. -->
+          <button
+            type="button"
+            class="shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title={sourceName}
+            aria-label={t('mailboxFromSession')}
+            onclick={() => onOpenSession?.(sourceName)}
+          >
+            <ChatAvatar seed={avatarSeed} size={28} />
+          </button>
+        {:else}
+          <span
+            class="shrink-0"
+            title={sourceKind === 'session' ? sourceName : ''}
+            aria-hidden={sourceKind !== 'session'}
+          >
+            <ChatAvatar seed={avatarSeed} size={28} />
+          </span>
+        {/if}
+      </div>
+    {/if}
+    <!-- Sending row: the spinner sits to the LEFT of the user bubble while the
+         backend has not yet confirmed the write. -->
+    <div class={cn('flex max-w-full items-center gap-2', isOwn ? 'flex-row' : 'flex-row-reverse')}>
     {#if isSending}
       <span
         class="size-3 shrink-0 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"
         title={t('sending')}
         aria-label={t('sending')}
       ></span>
-    {:else if showAvatar}
-      {#if canOpenSession}
-        <!-- Session hand-off: the SOURCE session's avatar jumps to it. -->
-        <button
-          type="button"
-          class="shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          title={sourceName}
-          aria-label={t('mailboxFromSession')}
-          onclick={() => onOpenSession?.(sourceName)}
-        >
-          <ChatAvatar seed={avatarSeed} size={28} />
-        </button>
-      {:else}
-        <span
-          class="shrink-0"
-          title={sourceKind === 'session' ? sourceName : ''}
-          aria-hidden={sourceKind !== 'session'}
-        >
-          <ChatAvatar seed={avatarSeed} size={28} />
-        </span>
-      {/if}
     {/if}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
