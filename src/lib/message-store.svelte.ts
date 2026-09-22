@@ -4,9 +4,18 @@
 // reading `messages`/`sorted` out. Split out of messages.svelte.ts so the
 // controller file stays about connection, sync and mailbox concerns.
 
-import { mapMessagesToChat, pretty } from './message-mapping'
+import { mapMessagesToChat } from './message-mapping'
 import { compareMessages, orderMessages } from './message-order'
-import type { ChatMessage, ChatPart, Message, ToolState } from './models'
+import {
+  addToolPartIn,
+  appendDeltaTo,
+  appendToolInputTo,
+  applyToolResultTo,
+  ensurePartIn,
+  startToolPartIn,
+  type ToolResultExtra,
+} from './message-parts'
+import type { ChatMessage, Message } from './models'
 
 export class MessageStore {
   messages = $state<ChatMessage[]>([])
@@ -200,14 +209,10 @@ export class MessageStore {
   }
 
   ensurePart(msgId: string, partId: string, type: string) {
-    this.setMsg(msgId, m =>
-      m.parts.some(p => p.id === partId)
-        ? m
-        : {
-            ...m,
-            parts: [...m.parts, { id: partId, type, text: '', tool: '' }],
-          },
-    )
+    this.setMsg(msgId, m => ({
+      ...m,
+      parts: ensurePartIn(m.parts, partId, type),
+    }))
   }
 
   appendDelta(
@@ -216,120 +221,48 @@ export class MessageStore {
     delta: string,
     reasoning: boolean,
   ) {
-    this.setMsg(msgId, m => {
-      const pidx = m.parts.findIndex(p => p.id === partId)
-      const parts = [...m.parts]
-      if (pidx >= 0) {
-        parts[pidx] = { ...parts[pidx]!, text: parts[pidx]!.text + delta }
-      } else {
-        parts.push({
-          id: partId,
-          type: reasoning ? 'reasoning' : 'text',
-          text: delta,
-          tool: '',
-        })
-      }
-      return { ...m, parts }
-    })
+    this.setMsg(msgId, m => ({
+      ...m,
+      parts: appendDeltaTo(m.parts, partId, delta, reasoning),
+    }))
   }
 
   /** Create the tool part as soon as argument streaming begins. */
   startToolPart(msgId: string, partId: string, name: string) {
-    this.setMsg(msgId, m => {
-      if (m.parts.some(p => p.id === partId)) return m
-      const state: ToolState = { status: 'running', title: name, inputText: '' }
-      const part: ChatPart = {
-        id: partId,
-        type: 'tool',
-        text: '',
-        tool: name,
-        state,
-      }
-      return { ...m, parts: [...m.parts, part] }
-    })
+    this.setMsg(msgId, m => ({
+      ...m,
+      parts: startToolPartIn(m.parts, partId, name),
+    }))
   }
 
   /** Accumulate streamed tool-argument JSON for the live preview. */
   appendToolInput(partId: string, delta: string) {
     const sid = this.streamingId
     if (!sid) return
-    this.setMsg(sid, m => {
-      const parts = m.parts.map(p => {
-        if (p.id !== partId) return p
-        const old: ToolState = p.state ?? { status: '', title: '' }
-        return {
-          ...p,
-          state: { ...old, inputText: (old.inputText ?? '') + delta },
-        }
-      })
-      return { ...m, parts }
-    })
+    this.setMsg(sid, m => ({
+      ...m,
+      parts: appendToolInputTo(m.parts, partId, delta),
+    }))
   }
 
   addToolPart(msgId: string, partId: string, name: string, input: unknown) {
-    const asMap =
-      input && typeof input === 'object' && !Array.isArray(input)
-        ? (input as Record<string, unknown>)
-        : null
-    const state: ToolState = { status: 'running', title: name, input: asMap }
-    this.setMsg(msgId, m => {
-      const pidx = m.parts.findIndex(p => p.id === partId)
-      const parts = [...m.parts]
-      const part: ChatPart = {
-        id: partId,
-        type: 'tool',
-        text: '',
-        tool: name,
-        state,
-      }
-      if (pidx >= 0) parts[pidx] = part
-      else parts.push(part)
-      return { ...m, parts }
-    })
+    this.setMsg(msgId, m => ({
+      ...m,
+      parts: addToolPartIn(m.parts, partId, name, input),
+    }))
   }
 
   updateToolResult(
     partId: string,
     result: unknown,
-    extra: {
-      errorMsg?: string
-      changeId?: string
-      diff?: string
-      additions?: number
-      deletions?: number
-      data?: Record<string, unknown>
-    } = {},
+    extra: ToolResultExtra = {},
   ) {
     const sid = this.streamingId
     if (!sid) return
-    this.setMsg(sid, m => {
-      const parts = m.parts.map(p => {
-        if (p.id !== partId) return p
-        const old = p.state ?? { status: '', title: '' }
-        const output =
-          typeof result === 'string'
-            ? result
-            : result == null
-              ? null
-              : pretty(result)
-        return {
-          ...p,
-          state: {
-            status: extra.errorMsg != null ? 'error' : 'complete',
-            title: old.title,
-            error: extra.errorMsg ?? old.error ?? null,
-            input: old.input ?? null,
-            output: output ?? old.output ?? null,
-            data: extra.data ?? old.data ?? null,
-            changeId: extra.changeId ?? old.changeId ?? null,
-            diff: extra.diff ?? old.diff ?? null,
-            additions: extra.additions ?? old.additions ?? null,
-            deletions: extra.deletions ?? old.deletions ?? null,
-          } satisfies ToolState,
-        }
-      })
-      return { ...m, parts }
-    })
+    this.setMsg(sid, m => ({
+      ...m,
+      parts: applyToolResultTo(m.parts, partId, result, extra),
+    }))
   }
 
   addError(text: string) {

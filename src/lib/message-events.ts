@@ -3,6 +3,8 @@
 // dedup / run boundaries / reconnect and passes the few cross-cutting actions
 // it needs (finish turn, reconcile, mailbox refresh) through `hooks`. Split out
 // of messages.svelte.ts to keep the controller file about the connection.
+
+import { filePartFrom } from './message-parts'
 import type { MessageStore } from './message-store.svelte'
 
 /** Cross-cutting actions the router invokes on the controller. */
@@ -151,46 +153,16 @@ export function applyStreamEvent(
       // store; `code` is the file:<code> segment. Render it as a file part
       // (same path as persisted file parts). Both `file` and `reasoning-file`
       // are shown.
-      const code = params['code'] as string | undefined
-      if (code == null || code === '') break
+      const part = filePartFrom(params)
+      if (part == null) break
       const sid = streamMsgId()
       if (sid == null) break
       store.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
-      const partId = `f${code}`
       const existing = store.messages
         .find(m => m.id === sid)
-        ?.parts.some(p => p.id === partId)
+        ?.parts.some(p => p.id === part.id)
       if (!existing) {
-        store.setMsg(sid, m => ({
-          ...m,
-          parts: [
-            ...m.parts,
-            {
-              id: partId,
-              type: 'file',
-              text: '',
-              tool: '',
-              code,
-              name: (params['name'] as string | undefined) ?? null,
-              mime: (params['mediaType'] as string | undefined) ?? null,
-              size: params['size'] != null ? Number(params['size']) : null,
-              width: params['width'] != null ? Number(params['width']) : null,
-              height:
-                params['height'] != null ? Number(params['height']) : null,
-              durationMs:
-                params['durationMs'] != null
-                  ? Number(params['durationMs'])
-                  : params['duration_ms'] != null
-                    ? Number(params['duration_ms'])
-                    : null,
-              thumbCode:
-                (params['thumbCode'] as string | undefined) ??
-                (params['thumb_code'] as string | undefined) ??
-                null,
-              thumbhash: (params['thumbhash'] as string | undefined) ?? null,
-            },
-          ],
-        }))
+        store.setMsg(sid, m => ({ ...m, parts: [...m.parts, part] }))
       }
       break
     }
