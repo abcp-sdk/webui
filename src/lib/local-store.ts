@@ -70,6 +70,7 @@ export class LocalStore {
         id TEXT NOT NULL,
         role TEXT NOT NULL,
         prev_id TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL DEFAULT '',
         order_key INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'complete',
@@ -99,6 +100,21 @@ export class LocalStore {
       this.db.exec(
         "ALTER TABLE local_sessions ADD COLUMN group_key TEXT NOT NULL DEFAULT ''",
       )
+    } catch {
+      /* column already present */
+    }
+    // v4 → v5: local_messages gains the message ORIGIN `source` column. The
+    // write paths left it out, so any cached rows predate it — and because the
+    // incremental sync trusts its tip anchor, those rows would keep rendering
+    // with an empty source (a session hand-off shown as the reader's own
+    // prompt). Adding the column SUCCEEDS only once; use that as the signal to
+    // drop the message cache so the next boot refetches with source intact.
+    try {
+      this.db.exec(
+        "ALTER TABLE local_messages ADD COLUMN source TEXT NOT NULL DEFAULT ''",
+      )
+      this.run('DELETE FROM local_messages', [])
+      this.run('DELETE FROM local_sync_state', [])
     } catch {
       /* column already present */
     }
@@ -253,16 +269,18 @@ export class LocalStore {
       let order = (maxRow.length ? Number(maxRow[0]!['k'] ?? 0) : 0) + 1
       for (const m of msgs) {
         this.run(
-          `INSERT INTO local_messages (session_id, id, role, prev_id, created_at, order_key, status, parts_json)
-           VALUES (?,?,?,?,?,?,?,?)
+          `INSERT INTO local_messages (session_id, id, role, prev_id, source, created_at, order_key, status, parts_json)
+           VALUES (?,?,?,?,?,?,?,?,?)
            ON CONFLICT(session_id, id) DO UPDATE SET role=excluded.role,
-             prev_id=excluded.prev_id, created_at=excluded.created_at,
+             prev_id=excluded.prev_id, source=excluded.source,
+             created_at=excluded.created_at,
              status=excluded.status, parts_json=excluded.parts_json`,
           [
             sessionId,
             m.id,
             m.role,
             m.prevId,
+            m.source ?? '',
             m.createdAt ?? '',
             order++,
             'complete',
@@ -292,13 +310,14 @@ export class LocalStore {
         if (m.isLocal) continue // optimistic/streaming rows are not history
         this.run(
           `INSERT OR REPLACE INTO local_messages
-             (session_id, id, role, prev_id, created_at, order_key, status, parts_json)
-           VALUES (?,?,?,?,?,?,?,?)`,
+             (session_id, id, role, prev_id, source, created_at, order_key, status, parts_json)
+           VALUES (?,?,?,?,?,?,?,?,?)`,
           [
             sessionId,
             m.id,
             m.role,
             m.prevId,
+            m.source ?? '',
             m.createdAt,
             order++,
             m.status,
