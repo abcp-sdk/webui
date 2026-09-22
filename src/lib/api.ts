@@ -86,6 +86,7 @@ export class AgentApi {
     const org = (params['org'] as string) || ''
     const repo = (params['repo'] as string) || ''
     const branch = (params['branch'] as string) || ''
+    const locale = (params['locale'] as string) || ''
     const r = await this._c.createSession({
       name: (params['name'] as string) || '',
       ...(model ? { model } : {}),
@@ -94,6 +95,7 @@ export class AgentApi {
       ...(org ? { org } : {}),
       ...(repo ? { repo } : {}),
       ...(branch ? { branch } : {}),
+      ...(locale ? { locale } : {}),
     })
     return {
       id: r.sessionName,
@@ -103,6 +105,7 @@ export class AgentApi {
       org,
       repo,
       branch,
+      locale,
       createdAt: '',
       updatedAt: '',
       lastMessageAt: '',
@@ -610,6 +613,7 @@ export function emptySession(id: string): Session {
     model: '',
     variant: '',
     preset: '',
+    locale: '',
     createdAt: '',
     updatedAt: '',
     lastMessageAt: '',

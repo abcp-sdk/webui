@@ -34,7 +34,7 @@
       // server resolves the requested agent locale; without it the panel fell
       // back to the default English prompt.
       presets = await store.api.presets(
-        Prefs.effectiveAgentLocale(getLocale() === 'zh'),
+        Prefs.loadAgentLocale(),
       )
     } catch (e) {
       showErrorToast(String(e))

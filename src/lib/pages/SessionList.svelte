@@ -6,8 +6,10 @@
   import { t } from '$lib/i18n.svelte'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { promptDialog, confirmDialog } from '$lib/dialogs'
+  import { Prefs } from '$lib/prefs'
   import { sessionName } from '$lib/models'
   import { previewLabel } from '$lib/api-mappers'
+  import NewSessionDialog from './NewSessionDialog.svelte'
   import SessionRow from '$lib/components/SessionRow.svelte'
   import ContextMenu, { type ContextMenuItem } from '$lib/components/ContextMenu.svelte'
   import type { MenuAnchor } from '$lib/context-menu-position'
@@ -126,11 +128,18 @@
     exitSelect()
   }
 
-  async function create() {
-    const name = await promptDialog({ title: t('newSession'), confirmLabel: t('create') })
-    if (!name) return
+  let newSessionOpen = $state(false)
+
+  function create() {
+    newSessionOpen = true
+  }
+
+  async function onCreateSession(name: string, locale: 'zh' | 'en') {
     try {
-      await store.api.createSession({ name })
+      // Pin the language at creation so the session never drifts with the
+      // mutable tenant default.
+      await store.api.createSession({ name, locale })
+      newSessionOpen = false
       await store.refreshSessions()
     } catch (e) {
       showErrorToast(String(e))
@@ -275,4 +284,10 @@
   {#if rowMenu}
     <ContextMenu anchor={rowMenu.anchor} items={rowMenuItems} onPick={v => void onRowMenuPick(v)} onClose={() => (rowMenu = null)} />
   {/if}
+
+  <NewSessionDialog
+    bind:open={newSessionOpen}
+    defaultLocale={Prefs.loadAgentLocale()}
+    onCreate={(name, locale) => void onCreateSession(name, locale)}
+  />
 </div>
