@@ -298,6 +298,7 @@ export class LocalStore {
       status: (String(r['status']) || 'complete') as ChatMessage['status'],
       createdAt: String(r['created_at']),
       prevId: String(r['prev_id']),
+      source: String(r['source'] ?? ''),
       seq: Number(r['order_key']),
       isLocal: false,
       parts: parts.map(chatPartFromJson),

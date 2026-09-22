@@ -120,6 +120,7 @@ type PbMessage = {
   role: string
   createdAt: string
   prevId: string
+  source: string
   parts: PbPart[]
 }
 
@@ -224,6 +225,7 @@ export function messageFromPb(m: PbMessage): Message {
     role: m.role,
     createdAt: m.createdAt || null,
     prevId: m.prevId,
+    source: m.source,
     parts,
   }
 }

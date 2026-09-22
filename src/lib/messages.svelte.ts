@@ -25,6 +25,7 @@ export function mapMessagesToChat(msgs: Message[]): ChatMessage[] {
     seq: i,
     isLocal: false,
     prevId: m.prevId,
+    source: m.source ?? '',
     parts: m.parts.map(p => ({
       id: p.id || `p${Date.now()}${i}`,
       type: p.type,
@@ -789,6 +790,7 @@ export class MessagesController {
         const role =
           typeof params['role'] === 'string' ? params['role'] : 'assistant'
         const streaming = params['streaming'] === true
+        const src = typeof params['source'] === 'string' ? params['source'] : ''
         if (addedId !== '') {
           if (streaming && role === 'assistant') {
             // A new step begins: any PRIOR streaming bubble is done (the server
@@ -807,7 +809,7 @@ export class MessagesController {
             // The prompt was persisted into the chain: render the user bubble
             // with the server-authored id/position. (The composer spinner is
             // unrelated — it already stopped at `accepted`.)
-            this.upsertServerMessage(addedId, prevId, 'user')
+            this.upsertServerMessage(addedId, prevId, 'user', src)
           }
         }
         this.notify()
@@ -881,6 +883,7 @@ export class MessagesController {
         createdAt: new Date().toISOString(),
         isLocal: true,
         prevId: prevId ?? '',
+        source: '',
         seq: this.allocSeq(),
       },
     ]
@@ -889,7 +892,12 @@ export class MessagesController {
 
   /** Create a minimal server-authored bubble (used for a user message whose
    *  full body is fetched by the following `reconcile`). */
-  private upsertServerMessage(id: string, prevId: string, role: string): void {
+  private upsertServerMessage(
+    id: string,
+    prevId: string,
+    role: string,
+    source = '',
+  ): void {
     if (this.messages.some(m => m.id === id)) return
     this.messages = [
       ...this.messages,
@@ -901,6 +909,7 @@ export class MessagesController {
         createdAt: new Date().toISOString(),
         isLocal: false,
         prevId,
+        source,
         seq: this.allocSeq(),
       },
     ]
@@ -1099,6 +1108,7 @@ export class MessagesController {
       parts: [{ id: `p${now}`, type: 'text' as const, text, tool: '' }],
       createdAt: new Date().toISOString(),
       prevId: '',
+      source: '',
       seq: this.allocSeq(),
     }
     this.localErrors.push(err)

@@ -688,10 +688,13 @@
         {#each ctrl.sorted as msg (msg.id)}
           <MessageBubble
             {msg}
+            sessionId={sid}
             api={store.api}
             onUndo={id => void ctrl!.revert(id)}
             onResend={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
             onEdit={txt => void ctrl!.resendFrom(ctrl!.messages.find(m => m.id === msg.id)!, txt)}
+            onOpenSession={name => store.pickSession(name)}
+            sessionExists={name => store.sessionById(name) !== null}
           />
         {/each}
       {/if}

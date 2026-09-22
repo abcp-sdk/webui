@@ -122,6 +122,9 @@ export interface Message {
   parts: MessagePart[]
   createdAt?: string | null
   prevId: string
+  /** ORIGIN of the message ('' for agent-authored rows): `user`,
+   *  `session:{name}`, `system:{name}`, or extension-defined. */
+  source: string
 }
 
 // ---- attachments ----
@@ -212,6 +215,9 @@ export interface ChatMessage {
   prevId: string
   /** Client-only bubble (optimistic user msg / streaming assistant). */
   isLocal: boolean
+  /** ORIGIN of the message: `user`, `session:{name}`, `system:{name}`, or
+   *  extension-defined. '' for agent-authored rows. */
+  source: string
   /** Server-assigned id for an optimistic bubble, learned from the Prompt
    *  `accepted` response. Kept separate from `id` (the stable local key) so
    *  the optimistic bubble and its persisted copy can coexist until the
