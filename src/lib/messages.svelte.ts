@@ -7,18 +7,19 @@
 //   - MessageStore  (message-store.svelte.ts)  reactive list + mutations
 //   - MessageSync   (message-sync.ts)          local mirror + server delta
 //   - applyStreamEvent (message-events.ts)     pure event → store router
-//   - this class    TRANSPORT (stream, reconnect, watchdog, idle probe),
-//                   the mailbox, and the public actions (deliver/revert/…).
+//   - SessionStream (session-stream.ts)        transport + reconnect/watchdog
+//   - this class    wiring, the mailbox, and the public actions
+//                   (deliver/revert/resend/stop/loadMore).
 // `messages`/`sorted`/`sending`/… are re-exposed as getters so call sites are
 // unchanged.
 import type { AgentApi } from './api'
 import type { LocalStore } from './db'
-import type { StreamEvent } from './events'
 import { applyStreamEvent } from './message-events'
 import { compareMessages, orderMessages } from './message-order'
 import { MessageStore } from './message-store.svelte'
 import { MessageSync } from './message-sync'
 import type { ChatMessage, UploadedFile } from './models'
+import { SessionStream } from './session-stream'
 
 export { mapMessagesToChat } from './message-mapping'
 export { compareMessages, orderMessages }
@@ -33,44 +34,10 @@ export class MessagesController {
   readonly store = new MessageStore()
   /** Local-first mirror + server sync (owns the tip/oldest anchors). */
   private sync: MessageSync
+  /** Live per-session transport (stream, reconnect, watchdog, idle probe). */
+  private stream: SessionStream
 
-  private streamAbort: AbortController | null = null
   private sessionListeners: SessionListener[] = []
-
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
-  private reconnectAttempt = 0
-  private subSid: string | null = null
-
-  private seenEids = new Set<string>()
-  private activeRunId: string | null = null
-  private awaitingRun = false
-
-  private static MAX_RECONNECT = 10
-  private static INITIAL_RECONNECT = 1000
-  private static MAX_RECONNECT_MS = 30_000
-  private static IDLE_PROBE_EVERY = 20_000
-  /**
-   * A long-lived server stream can go HALF-OPEN: the socket dies (mobile
-   * network handoff, NAT timeout, HTTP/2 GOAWAY lost) but `read()` neither
-   * resolves nor rejects, so `onStreamClosed` never fires and the client waits
-   * forever. The sidebar keeps updating (it uses a SEPARATE `watchSessions`
-   * stream) while the open chat freezes — the classic "must refresh to see the
-   * reply" bug. These bound the silence: once a believed-active turn has
-   * produced no stream event for STREAM_STALE_MS, force a reconnect.
-   */
-  private static STREAM_STALE_MS = 15_000
-  private static WATCHDOG_EVERY = 5_000
-  /** Bounded liveness probe: a healthy transport must answer State fast. */
-  private static PROBE_TIMEOUT_MS = 4_000
-  /** While the transport stays healthy, reconnect at most this often. */
-  private static HEALTHY_RECONNECT_COOLDOWN_MS = 60_000
-  private idleProbeTimer: ReturnType<typeof setInterval> | null = null
-  private watchdogTimer: ReturnType<typeof setInterval> | null = null
-  private lastActivity = Date.now()
-  /** Wall-clock of the last event RECEIVED on the per-session stream. */
-  private lastStreamEventAt = Date.now()
-  private lastRecoveryAt = 0
-  private probing = false
 
   private sendFailedMsg = (e: unknown): string => `send failed: ${e}`
 
@@ -83,6 +50,21 @@ export class MessagesController {
     this.api = api
     this.getSessionId = getSessionId
     this.sync = new MessageSync(api, getSessionId, local, this.store)
+    this.stream = new SessionStream(api, {
+      getSessionId: () => this.getSessionId(),
+      getSince: () => this.sync.syncedTipId,
+      isSending: () => this.store.sending,
+      onEvent: ev => this.handleEvent(ev),
+      onRunBoundary: () => this.clearStreaming(),
+      onIdle: () => this.syncIdleAndPull(),
+      onStreamClosed: () => this.syncIdle(),
+      onBusy: () => {
+        if (!this.store.sending) {
+          this.store.sending = true
+          this.store.notify()
+        }
+      },
+    })
     if (opts?.sendFailed) this.sendFailedMsg = opts.sendFailed
   }
 
@@ -131,7 +113,7 @@ export class MessagesController {
     await this.sync.hydrate(sid)
     await this.sync.sync(sid)
     await this.recover()
-    this.connect(sid)
+    this.stream.connect(sid)
     void this.refreshMailbox()
   }
 
@@ -199,172 +181,10 @@ export class MessagesController {
     }
   }
 
-  private connect(sid: string) {
-    this.reconnectTimer && clearTimeout(this.reconnectTimer)
-    this.reconnectTimer = null
-    this.streamAbort?.abort()
-    const ac = new AbortController()
-    this.streamAbort = ac
-    this.subSid = sid
-    this.reconnectAttempt = 0
-    this.lastActivity = Date.now()
-    this.idleProbeTimer && clearInterval(this.idleProbeTimer)
-    // Run boundary: the FIRST event of the new connection resets stale
-    // streaming state; replay rebuilds it cleanly.
-    this.seenEids.clear()
-    this.activeRunId = null
-    this.awaitingRun = true
-    this.lastStreamEventAt = Date.now()
-    void (async () => {
-      try {
-        for await (const ev of this.api.streamEvents(
-          sid,
-          this.sync.syncedTipId,
-          ac.signal,
-        )) {
-          if (ac.signal.aborted) return
-          this.lastStreamEventAt = Date.now()
-          this.handleEvent(ev)
-        }
-        this.onStreamClosed(sid)
-      } catch {
-        if (!ac.signal.aborted) this.onStreamClosed(sid)
-      }
-    })()
-    this.startIdleProbe()
-    this.startWatchdog()
-  }
-
-  /**
-   * Detect a HALF-OPEN per-session stream and force a reconnect. When the
-   * session is believed busy but no stream event has arrived for
-   * STREAM_STALE_MS, the stream may be dead WITHOUT an error (a dropped socket
-   * or a server-side ordered consumer that stopped yielding) — so
-   * `onStreamClosed` never fires and the client waits forever. Tear it down and
-   * reconnect; the new subscription replays from the tip anchor (eid dedup
-   * makes the overlap harmless). This is what lets a mailbox-drained
-   * continuation surface without a manual page refresh.
-   *
-   * `lastStreamEventAt` is reset on every reconnect, so a genuinely long quiet
-   * tool reconnects at most once per STREAM_STALE_MS — bounded and safe.
-   */
-  private startWatchdog() {
-    this.watchdogTimer && clearInterval(this.watchdogTimer)
-    this.watchdogTimer = setInterval(() => {
-      if (!this.store.sending) return
-      if (
-        Date.now() - this.lastStreamEventAt <
-        MessagesController.STREAM_STALE_MS
-      )
-        return
-      const sid = this.subSid ?? this.getSessionId()
-      if (!sid || sid !== this.getSessionId()) return
-      void this.recoverStaleStream(sid)
-    }, MessagesController.WATCHDOG_EVERY)
-  }
-
-  /**
-   * Decide whether a silent stream is dead and reconnect if so.
-   *
-   * A unary `State` over the SAME connection is the discriminator:
-   *  - it hangs/errors  → the transport is half-open (dead socket): reconnect
-   *    immediately, resetting the backoff budget (liveness, not a crash loop).
-   *  - it answers idle  → the turn finished but its terminal event was lost:
-   *    converge and pull the delta.
-   *  - it answers busy  → the transport is healthy but the ordered consumer
-   *    stopped yielding (or a genuinely quiet long tool). Reconnect anyway —
-   *    replay-from-anchor + eid dedup make it harmless — but rate-limit to one
-   *    attempt per HEALTHY_RECONNECT_COOLDOWN_MS so a quiet tool cannot cause
-   *    a reconnect storm.
-   */
-  private async recoverStaleStream(sid: string): Promise<void> {
-    if (this.probing) return
-    this.probing = true
-    try {
-      const probe = await Promise.race([
-        this.api
-          .state(sid)
-          .then(([st]) =>
-            st === 'busy' || st === 'running'
-              ? ('busy' as const)
-              : ('idle' as const),
-          )
-          .catch(() => 'dead' as const),
-        new Promise<'timeout'>(r =>
-          setTimeout(() => r('timeout'), MessagesController.PROBE_TIMEOUT_MS),
-        ),
-      ])
-      // A fresh event may have landed while probing: stand down.
-      if (
-        Date.now() - this.lastStreamEventAt <
-        MessagesController.STREAM_STALE_MS
-      )
-        return
-      if (sid !== this.getSessionId()) return
-      if (probe === 'idle') {
-        this.syncIdle()
-        void this.sync.reconcile()
-        return
-      }
-      const now = Date.now()
-      if (
-        probe === 'busy' &&
-        now - this.lastRecoveryAt <
-          MessagesController.HEALTHY_RECONNECT_COOLDOWN_MS
-      ) {
-        return
-      }
-      this.lastRecoveryAt = now
-      this.reconnectAttempt = 0
-      this.lastStreamEventAt = now
-      this.streamAbort?.abort()
-      this.connect(sid)
-    } finally {
-      this.probing = false
-    }
-  }
-
   /** Drop any still-streaming local bubble and leave the active run. */
   private clearStreaming() {
     this.store.clearStreaming()
-    this.activeRunId = null
-  }
-
-  private onStreamClosed(sid: string) {
-    if (this.subSid != null && this.subSid !== sid) return
-    this.syncIdle()
-    if (sid !== this.getSessionId()) return
-    if (this.reconnectAttempt >= MessagesController.MAX_RECONNECT) return
-    const delay = Math.min(
-      MessagesController.MAX_RECONNECT_MS,
-      MessagesController.INITIAL_RECONNECT * 2 ** this.reconnectAttempt,
-    )
-    this.reconnectAttempt++
-    this.reconnectTimer = setTimeout(() => this.connect(sid), delay)
-  }
-
-  private startIdleProbe() {
-    this.idleProbeTimer && clearInterval(this.idleProbeTimer)
-    this.idleProbeTimer = setInterval(() => {
-      if (Date.now() - this.lastActivity < MessagesController.IDLE_PROBE_EVERY)
-        return
-      this.api
-        .state(this.getSessionId())
-        .then(([st]) => {
-          if (st === 'busy' || st === 'running') {
-            if (!this.store.sending) {
-              this.store.sending = true
-              this.store.notify()
-            }
-          } else {
-            // Idle on the server: converge and PULL anything the stream missed
-            // (a half-open window can swallow the final turn-complete).
-            this.syncIdle()
-            void this.sync.reconcile()
-          }
-        })
-        .catch(() => {})
-    }, MessagesController.IDLE_PROBE_EVERY)
+    this.stream.resetRun()
   }
 
   /** Converge to idle if the stream ended without a terminal event. */
@@ -373,24 +193,13 @@ export class MessagesController {
     this.finishStreaming()
   }
 
-  private handleEvent(ev: StreamEvent) {
-    this.lastActivity = Date.now()
-    // Dedup across the subscribe/replay overlap.
-    if (ev.eid) {
-      if (this.seenEids.has(ev.eid)) return
-      this.seenEids.add(ev.eid)
-      if (this.seenEids.size > 20000) this.seenEids.clear()
-    }
-    // Run boundary handling.
-    if (this.awaitingRun) {
-      this.awaitingRun = false
-      this.clearStreaming()
-    }
-    const run = ev.runId
-    if (run && run !== this.activeRunId) {
-      if (this.activeRunId != null) this.clearStreaming()
-      this.activeRunId = run
-    }
+  /** Idle confirmed by a live probe: converge AND pull the missed delta. */
+  private syncIdleAndPull() {
+    this.syncIdle()
+    void this.sync.reconcile()
+  }
+
+  private handleEvent(ev: { event: string; params: Record<string, unknown> }) {
     for (const cb of this.sessionListeners) {
       try {
         cb(ev.event, ev.params)
@@ -398,7 +207,7 @@ export class MessagesController {
         /* listener errors are not fatal */
       }
     }
-    // Translate the event into store mutations (pure router, see message-events).
+    // Translate the event into store mutations (pure router, message-events).
     applyStreamEvent(this.store, ev.event, ev.params, {
       finishStreaming: () => this.finishStreaming(),
       refreshMailbox: () => void this.refreshMailbox(),
@@ -412,7 +221,7 @@ export class MessagesController {
    *  authoritative delta. */
   private finishStreaming() {
     this.store.finishStreaming()
-    this.activeRunId = null
+    this.stream.resetRun()
     void this.sync.reconcile()
   }
 
@@ -461,13 +270,6 @@ export class MessagesController {
   }
 
   dispose() {
-    this.reconnectTimer && clearTimeout(this.reconnectTimer)
-    this.reconnectTimer = null
-    this.idleProbeTimer && clearInterval(this.idleProbeTimer)
-    this.idleProbeTimer = null
-    this.watchdogTimer && clearInterval(this.watchdogTimer)
-    this.watchdogTimer = null
-    this.streamAbort?.abort()
-    this.streamAbort = null
+    this.stream.dispose()
   }
 }
