@@ -28,8 +28,8 @@
     void (async () => {
       try {
         tools = await store.api.tools(Prefs.effectiveAgentLocale(getLocale() === 'zh'))
-      } catch {
-        /* tools optional */
+      } catch (e) {
+        showErrorToast(t('loadError', { e: String(e) }))
       }
     })()
   })

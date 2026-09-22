@@ -14,6 +14,7 @@
   import IconButton from '$lib/components/layout/IconButton.svelte'
   import SectionLabel from '$lib/components/layout/SectionLabel.svelte'
   import EmptyState from '$lib/components/layout/EmptyState.svelte'
+  import ReconnectBanner from '$lib/components/ReconnectBanner.svelte'
   import { AppIcons } from '$lib/icons'
 
   let { store }: PageProps = $props()
@@ -235,11 +236,7 @@
     {/if}
   </PageHeader>
 
-  {#if store.sessionError}
-    <div class="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-meta text-destructive">
-      {t('connectionError')} · {store.sessionError}
-    </div>
-  {/if}
+  <ReconnectBanner />
 
   <SectionLabel class="normal-case">{t('recent')}</SectionLabel>
 
