@@ -44,7 +44,11 @@ describe('pushSibling', () => {
   it('keeps the stack at [root, current] then pushes the sibling', () => {
     const a: AppPage = { kind: 'config_sub', key: 'a', id: 'a' }
     const b: AppPage = { kind: 'config_sub', key: 'b', id: 'b' }
-    const stack = [root, a, { kind: 'preset_form', key: 'preset_form_new' }]
+    const stack: AppPage[] = [
+      root,
+      a,
+      { kind: 'preset_form', key: 'preset_form_new' },
+    ]
     expect(pushSibling(stack, b)).toEqual([root, b])
   })
 
