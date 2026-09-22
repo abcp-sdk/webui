@@ -3,17 +3,21 @@
 // one long-lived watchSession stream per active session with exponential
 // backoff reconnect, eid dedup and run boundaries.
 //
-// The reactive message list + content mutations live in [MessageStore]; this
-// class owns the TRANSPORT (stream, reconnect, watchdog, idle probe), the SYNC
-// (baseline, fetch, reconcile) and the mailbox. `sorted`/`messages`/`sending`
-// are re-exposed as getters so existing call sites are unchanged.
+// Responsibilities are split:
+//   - MessageStore  (message-store.svelte.ts)  reactive list + mutations
+//   - MessageSync   (message-sync.ts)          local mirror + server delta
+//   - applyStreamEvent (message-events.ts)     pure event → store router
+//   - this class    TRANSPORT (stream, reconnect, watchdog, idle probe),
+//                   the mailbox, and the public actions (deliver/revert/…).
+// `messages`/`sorted`/`sending`/… are re-exposed as getters so call sites are
+// unchanged.
 import type { AgentApi } from './api'
 import type { LocalStore } from './db'
 import type { StreamEvent } from './events'
 import { applyStreamEvent } from './message-events'
-import { mapMessagesToChat } from './message-mapping'
 import { compareMessages, orderMessages } from './message-order'
 import { MessageStore } from './message-store.svelte'
+import { MessageSync } from './message-sync'
 import type { ChatMessage, UploadedFile } from './models'
 
 export { mapMessagesToChat } from './message-mapping'
@@ -24,13 +28,11 @@ type SessionListener = (event: string, params: Record<string, unknown>) => void
 export class MessagesController {
   private api: AgentApi
   private getSessionId: () => string
-  private local: LocalStore | null
 
   /** Reactive message list + all content/part mutations. */
   readonly store = new MessageStore()
-
-  private syncedTipId = ''
-  private syncedOldestId = ''
+  /** Local-first mirror + server sync (owns the tip/oldest anchors). */
+  private sync: MessageSync
 
   private streamAbort: AbortController | null = null
   private sessionListeners: SessionListener[] = []
@@ -80,7 +82,7 @@ export class MessagesController {
   ) {
     this.api = api
     this.getSessionId = getSessionId
-    this.local = local
+    this.sync = new MessageSync(api, getSessionId, local, this.store)
     if (opts?.sendFailed) this.sendFailedMsg = opts.sendFailed
   }
 
@@ -126,8 +128,8 @@ export class MessagesController {
   }
 
   private async boot(sid: string) {
-    await this.hydrateFromLocal(sid)
-    await this.sync(sid)
+    await this.sync.hydrate(sid)
+    await this.sync.sync(sid)
     await this.recover()
     this.connect(sid)
     void this.refreshMailbox()
@@ -182,127 +184,6 @@ export class MessagesController {
     }
   }
 
-  private async hydrateFromLocal(sid: string) {
-    const l = this.local
-    if (!l) return
-    try {
-      const cached = await l.loadMessages(sid)
-      // Only trust a stored anchor when we actually hold cached messages.
-      this.syncedTipId = cached.length ? await l.serverTipId(sid) : ''
-      this.syncedOldestId = cached.length ? await l.oldestCachedId(sid) : ''
-      if (cached.length) {
-        this.store.messages = [...cached, ...this.store.inFlightLocal()]
-        this.store.renumber()
-        this.store.notify()
-      }
-    } catch {
-      /* cache unreadable — fall through network-only */
-    }
-  }
-
-  /** Incremental when we hold an anchor, else a baseline fetch. */
-  private async sync(sid: string) {
-    const l = this.local
-    this.store.loading = this.store.messages.length === 0
-    this.store.notify()
-    try {
-      const cacheConsistent =
-        this.store.messages.length === 0 ||
-        (this.syncedTipId !== '' &&
-          this.syncedOldestId !== '' &&
-          (await l?.oldestCachedId(sid)) === this.syncedOldestId)
-      if (l && this.syncedTipId && cacheConsistent) {
-        const r = await this.api.messagesAfter(sid, this.syncedTipId)
-        if (r.resync) {
-          await this.baseline(sid)
-        } else if (
-          r.messages.length === 0 &&
-          this.store.messages.length === 0
-        ) {
-          await this.baseline(sid)
-        } else {
-          this.store.mergeServer(r.messages)
-          this.syncedTipId = r.tipId
-          await l.persistMessages(sid, this.store.messages, r.tipId)
-        }
-      } else {
-        await this.baseline(sid)
-      }
-    } catch {
-      /* offline: keep whatever the local cache showed */
-    }
-    this.store.loading = false
-    this.store.notify()
-  }
-
-  /** Full baseline: the newest page, replacing any cached copy. */
-  private async baseline(sid: string) {
-    try {
-      const [msgs, more] = await this.api.messages(sid, undefined, 50)
-      const chat = mapMessagesToChat(msgs)
-      this.store.messages = [
-        ...this.store.inFlightLocal(),
-        ...this.store.errors,
-        ...chat,
-      ]
-      this.store.renumber()
-      this.store.hasMore = more
-      const l = this.local
-      if (l) {
-        this.syncedTipId = chat.length ? chat[chat.length - 1]!.id : ''
-        await l.applyServerMessages(sid, msgs, {
-          replace: true,
-          tipId: this.syncedTipId,
-        })
-        this.syncedOldestId = await l.oldestCachedId(sid)
-      }
-    } catch {
-      /* keep the existing cache */
-    }
-  }
-
-  private async fetchMessages(before?: string) {
-    this.store.loading = true
-    this.store.notify()
-    try {
-      const sid = this.getSessionId()
-      const [msgs, more] = await this.api.messages(sid, before, 50)
-      const chat = mapMessagesToChat(msgs)
-      if (before != null) {
-        const existing = new Set(this.store.messages.map(m => m.id))
-        this.store.messages = [
-          ...chat.filter(m => !existing.has(m.id)),
-          ...this.store.messages,
-        ]
-      } else {
-        this.store.messages = [
-          ...this.store.inFlightLocal(),
-          ...this.store.errors,
-          ...chat,
-        ]
-      }
-      this.store.renumber()
-      this.store.hasMore = more
-    } catch {
-      /* keep current view */
-    }
-    this.store.loading = false
-    this.store.notify()
-    const l = this.local
-    if (l) {
-      try {
-        await l.persistMessages(
-          this.getSessionId(),
-          this.store.messages,
-          this.syncedTipId,
-        )
-        this.syncedOldestId = await l.oldestCachedId(this.getSessionId())
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
   private async recover() {
     // A busy session is reconstructed from the stream itself: replay delivers
     // the live step's `message-added{streaming:true}` (with its server id) plus
@@ -338,7 +219,7 @@ export class MessagesController {
       try {
         for await (const ev of this.api.streamEvents(
           sid,
-          this.syncedTipId,
+          this.sync.syncedTipId,
           ac.signal,
         )) {
           if (ac.signal.aborted) return
@@ -422,7 +303,7 @@ export class MessagesController {
       if (sid !== this.getSessionId()) return
       if (probe === 'idle') {
         this.syncIdle()
-        void this.reconcile()
+        void this.sync.reconcile()
         return
       }
       const now = Date.now()
@@ -479,7 +360,7 @@ export class MessagesController {
             // Idle on the server: converge and PULL anything the stream missed
             // (a half-open window can swallow the final turn-complete).
             this.syncIdle()
-            void this.reconcile()
+            void this.sync.reconcile()
           }
         })
         .catch(() => {})
@@ -521,45 +402,18 @@ export class MessagesController {
     applyStreamEvent(this.store, ev.event, ev.params, {
       finishStreaming: () => this.finishStreaming(),
       refreshMailbox: () => void this.refreshMailbox(),
-      reconcile: () => void this.reconcile(),
+      reconcile: () => void this.sync.reconcile(),
       clearStreaming: () => this.clearStreaming(),
-      fetchMessages: () => void this.fetchMessages(),
+      fetchMessages: () => void this.sync.fetch(),
     })
   }
+
   /** Mark every streaming bubble complete, leave the busy state, and pull the
    *  authoritative delta. */
   private finishStreaming() {
     this.store.finishStreaming()
     this.activeRunId = null
-    void this.reconcile()
-  }
-
-  /** After a turn completes (or a message-added nudge), pull the server delta
-   *  and adopt real ids. Works without a local store: the merge is in-memory
-   *  and persistence is simply skipped. */
-  private async reconcile() {
-    const l = this.local
-    const sid = this.getSessionId()
-    try {
-      if (!this.syncedTipId) {
-        await this.baseline(sid)
-        return
-      }
-      const r = await this.api.messagesAfter(sid, this.syncedTipId)
-      if (r.resync) {
-        await this.baseline(sid)
-        return
-      }
-      this.store.mergeServer(r.messages)
-      this.syncedTipId = r.tipId
-      this.store.notify()
-      if (l) {
-        await l.persistMessages(sid, this.store.messages, this.syncedTipId)
-        this.syncedOldestId = await l.oldestCachedId(sid)
-      }
-    } catch {
-      /* offline reconcile retry on next turn */
-    }
+    void this.sync.reconcile()
   }
 
   stop() {
@@ -575,7 +429,7 @@ export class MessagesController {
     await this.api.revert(this.getSessionId(), messageId)
     this.clearStreaming()
     this.store.sending = false
-    await this.fetchMessages()
+    await this.sync.fetch()
   }
 
   /** Retry/Edit: withdraw a user message and everything after, then resend. */
@@ -592,7 +446,7 @@ export class MessagesController {
     await this.api.revert(this.getSessionId(), msg.id)
     this.clearStreaming()
     this.store.sending = false
-    await this.fetchMessages()
+    await this.sync.fetch()
     await this.deliver(
       trimmed,
       codes.map(code => ({ code, name: null, mime: null }) as UploadedFile),
@@ -603,7 +457,7 @@ export class MessagesController {
     if (!this.store.hasMore || this.store.loading) return
     const first = this.store.sorted[0]
     if (!first) return
-    await this.fetchMessages(first.id)
+    await this.sync.fetch(first.id)
   }
 
   dispose() {
