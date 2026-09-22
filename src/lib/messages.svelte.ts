@@ -14,6 +14,7 @@
 // unchanged.
 import type { AgentApi } from './api'
 import type { LocalStore } from './db'
+import type { StreamEvent } from './events'
 import { applyStreamEvent } from './message-events'
 import { compareMessages, orderMessages } from './message-order'
 import { MessageStore } from './message-store.svelte'
@@ -199,7 +200,7 @@ export class MessagesController {
     void this.sync.reconcile()
   }
 
-  private handleEvent(ev: { event: string; params: Record<string, unknown> }) {
+  private handleEvent(ev: StreamEvent) {
     for (const cb of this.sessionListeners) {
       try {
         cb(ev.event, ev.params)
