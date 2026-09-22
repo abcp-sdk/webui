@@ -19,12 +19,11 @@
   import { cn } from '$lib/utils'
   import IconButton from '$lib/components/layout/IconButton.svelte'
   import { DropdownMenu, DropdownMenuItem, DropdownMenuSeparator } from '$lib/components/ui/dropdown-menu'
-  import { Popover } from '$lib/components/ui/popover'
-  import { Select } from '$lib/components/ui/select'
-  import { Dialog } from '$lib/components/ui/dialog'
   import { AppIcons } from '$lib/icons'
   import MessageBubble from '$lib/components/MessageBubble.svelte'
   import MediaAttachment from '$lib/components/MediaAttachment.svelte'
+  import ChatInfoDialog from './ChatInfoDialog.svelte'
+  import ChatSettingsDialog from './ChatSettingsDialog.svelte'
 
   let { store }: PageProps = $props()
 
@@ -901,82 +900,19 @@
   </div>
 
   <!-- session info dialog -->
-  <Dialog bind:open={infoOpen} title={t('sessionInfo')}>
-    {#snippet children()}
-      <div class="space-y-2">
-        <div class="flex items-center gap-2">
-          <AppIcons.chat class="size-4 text-primary" />
-          <span class="truncate text-meta font-bold">{session?.id}</span>
-        </div>
-        {#each [
-          [t('modelLabel'), session?.model || t('none')],
-          [t('variantLabel'), session?.variant || t('variantNone')],
-          [t('presetLabel'), session?.preset || t('none')],
-          [t('agentLocale'), session?.locale || t('agentLocaleFollow')],
-        ] as [label, value] (label)}
-          <div class="flex items-start gap-3 border-t border-border/40 pt-2 first:border-t-0 first:pt-0">
-            <span class="w-24 shrink-0 text-micro text-muted-foreground">{label}</span>
-            <span class="min-w-0 flex-1 text-meta font-semibold">{value}</span>
-          </div>
-        {/each}
-      </div>
-    {/snippet}
-    {#snippet footer()}
-      <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (infoOpen = false)}>{t('close')}</button>
-      <button
-        type="button"
-        class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80"
-        onclick={() => {
-          infoOpen = false
-          void showSettings()
-        }}
-      >{t('edit')}</button>
-    {/snippet}
-  </Dialog>
+  <ChatInfoDialog bind:open={infoOpen} {session} onEdit={() => void showSettings()} />
 
   <!-- settings dialog -->
-  <Dialog bind:open={settingsOpen} title={t('settingsTitle')}>
-    {#snippet children()}
-      <div class="space-y-3">
-        <label class="block">
-          <span class="mb-1 block text-meta text-muted-foreground">{t('modelLabel')}</span>
-          <Select
-            bind:value={selectedRef}
-            placeholder={loadingModels ? t('loading') : t('none')}
-            items={modelOptions}
-          />
-        </label>
-        {#if variantsForModel.length}
-          <label class="block">
-            <span class="mb-1 block text-meta text-muted-foreground">{t('variantLabel')}</span>
-            <Select
-              bind:value={variant}
-              items={[{ value: '', label: t('variantNone') }, ...variantsForModel.map(v => ({ value: v.id, label: v.name || v.id }))]}
-            />
-          </label>
-        {/if}
-        <label class="block">
-          <span class="mb-1 block text-meta text-muted-foreground">{t('presetLabel')}</span>
-          <Select bind:value={preset} items={presetOptions.map(id => ({ value: id, label: id }))} />
-        </label>
-        <label class="block">
-          <span class="mb-1 block text-meta text-muted-foreground">{t('agentLocale')}</span>
-          <Select
-            bind:value={locale}
-            items={[
-              { value: '', label: t('agentLocaleFollow') },
-              { value: 'zh', label: '中文' },
-              { value: 'en', label: 'English' },
-            ]}
-          />
-        </label>
-        <p class="text-micro text-muted-foreground">{t('turnsByPreset')}</p>
-        <p class="text-micro text-muted-foreground">{t('sysPromptByPreset')}</p>
-      </div>
-    {/snippet}
-    {#snippet footer()}
-      <button type="button" class="rounded-md px-3 py-1.5 text-sm hover:bg-muted" onclick={() => (settingsOpen = false)}>{t('cancel')}</button>
-      <button type="button" class="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/80" onclick={() => void applySettings()}>{t('save')}</button>
-    {/snippet}
-  </Dialog>
+  <ChatSettingsDialog
+    bind:open={settingsOpen}
+    bind:selectedRef
+    bind:variant
+    bind:preset
+    bind:locale
+    {loadingModels}
+    {modelOptions}
+    variants={variantsForModel}
+    {presetOptions}
+    onSave={() => void applySettings()}
+  />
 {/if}
