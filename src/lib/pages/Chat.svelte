@@ -11,8 +11,9 @@
   import { confirmDialog, promptDialog } from '$lib/dialogs'
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { guessMime, mimeToKind } from '$lib/media'
-  import type { ModelInfo, ModelVariantInfo, Preset, ProviderInfo, Session, UploadedFile } from '$lib/models'
+  import type { ModelInfo, Preset, ProviderInfo, Session, UploadedFile } from '$lib/models'
   import { modelRefOf, sessionName } from '$lib/models'
+  import { buildModelOptions, fmtContext, fmtElapsed, variantsFor } from '$lib/chat-helpers'
   import { VoiceRecorder } from '$lib/voice'
   import { cn } from '$lib/utils'
   import IconButton from '$lib/components/layout/IconButton.svelte'
@@ -469,11 +470,6 @@
     else showToast(t('voiceTooShort'))
   }
 
-  function fmtDuration(ms: number): string {
-    const total = Math.floor(ms / 1000)
-    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
-  }
-
   /** AppIcons.camera capture (flutter `_pickImage(ImageSource.camera)`). */
   function takePhoto() {
     const input = document.createElement('input')
@@ -518,18 +514,9 @@
     }
   }
 
-  const modelOptions = $derived.by(() => {
-    const opts = allModels.map(m => ({ value: modelRefOf(m), label: modelRefOf(m) }))
-    if (selectedRef && !allModels.some(m => modelRefOf(m) === selectedRef)) {
-      opts.unshift({ value: selectedRef, label: selectedRef })
-    }
-    return opts
-  })
+  const modelOptions = $derived(buildModelOptions(allModels, selectedRef))
 
-  const variantsForModel = $derived.by(() => {
-    const sel = allModels.filter(m => modelRefOf(m) === selectedRef)
-    return sel.length ? sel[0]!.variants : ([] as ModelVariantInfo[])
-  })
+  const variantsForModel = $derived(variantsFor(allModels, selectedRef))
 
   $effect(() => {
     if (variantsForModel.length && !variantsForModel.some(v => v.id === variant)) variant = ''
@@ -591,13 +578,6 @@
         break
       }
     }
-  }
-
-  function fmtContext(tokens: number): string {
-    if (tokens <= 0) return ''
-    if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`
-    if (tokens >= 10_000) return `${Math.round(tokens / 1000)}k`
-    return `${(tokens / 1000).toFixed(1)}k`
   }
 
   const ctxLabel = $derived(fmtContext((session?.lastInputTokens ?? 0) + (session?.lastOutputTokens ?? 0)))
@@ -827,7 +807,7 @@
               onpointerup={() => void stopRecording()}
               onpointercancel={() => void stopRecording()}
             >
-              {recording ? `${t('releaseToSend')} · ${fmtDuration(voiceElapsed)}` : t('holdToTalk')}
+              {recording ? `${t('releaseToSend')} · ${fmtElapsed(voiceElapsed)}` : t('holdToTalk')}
             </button>
           {/if}
         </div>
