@@ -2,79 +2,37 @@
 // runes). Local-first boot (sqlite mirror) → incremental sync (tip anchor) →
 // one long-lived watchSession stream per active session with exponential
 // backoff reconnect, eid dedup and run boundaries.
+//
+// The reactive message list + content mutations live in [MessageStore]; this
+// class owns the TRANSPORT (stream, reconnect, watchdog, idle probe), the SYNC
+// (baseline, fetch, reconcile) and the mailbox. `sorted`/`messages`/`sending`
+// are re-exposed as getters so existing call sites are unchanged.
 import type { AgentApi } from './api'
 import type { LocalStore } from './db'
 import type { StreamEvent } from './events'
+import { applyStreamEvent } from './message-events'
+import { mapMessagesToChat } from './message-mapping'
 import { compareMessages, orderMessages } from './message-order'
-import type {
-  ChatMessage,
-  ChatPart,
-  Message,
-  ToolState,
-  UploadedFile,
-} from './models'
+import { MessageStore } from './message-store.svelte'
+import type { ChatMessage, UploadedFile } from './models'
+
+export { mapMessagesToChat } from './message-mapping'
+export { compareMessages, orderMessages }
 
 type SessionListener = (event: string, params: Record<string, unknown>) => void
-
-export function mapMessagesToChat(msgs: Message[]): ChatMessage[] {
-  return msgs.map((m, i) => ({
-    id: m.id,
-    role: m.role,
-    status: 'complete' as const,
-    createdAt: m.createdAt ?? '',
-    seq: i,
-    isLocal: false,
-    prevId: m.prevId,
-    source: m.source ?? '',
-    parts: m.parts.map(p => ({
-      id: p.id || `p${Date.now()}${i}`,
-      type: p.type,
-      text: p.text ?? '',
-      tool: p.tool ?? '',
-      state: p.state ?? null,
-      code: p.code ?? null,
-      name: p.name ?? null,
-      mime: p.mime ?? null,
-      size: p.size ?? null,
-      width: p.width ?? null,
-      height: p.height ?? null,
-      durationMs: p.durationMs ?? null,
-      thumbCode: p.thumbCode ?? null,
-      thumbhash: p.thumbhash ?? null,
-    })),
-  }))
-}
-
-// Re-export the pure ordering helpers for callers that only import this module.
-export { compareMessages, orderMessages }
 
 export class MessagesController {
   private api: AgentApi
   private getSessionId: () => string
   private local: LocalStore | null
 
-  messages = $state<ChatMessage[]>([])
-  sending = $state(false)
-  loading = $state(false)
-  hasMore = $state(false)
-
-  /** PENDING (unconsumed) mailbox entries for the open session — drives the
-   *  red badge on the top-bar mailbox button. Refreshed on boot, after a
-   *  delivery, and whenever the chain advances (a drained entry is consumed). */
-  pendingMailbox = $state(0)
-
-  /** Bumped after every mutation so the UI can react via $effect. */
-  revision = $state(0)
+  /** Reactive message list + all content/part mutations. */
+  readonly store = new MessageStore()
 
   private syncedTipId = ''
   private syncedOldestId = ''
 
   private streamAbort: AbortController | null = null
-  /** Local ERROR bubbles are not server chain members; keep them across
-   *  authoritative refreshes (mergeServer/fetchMessages) instead of dropping
-   *  them. Cleared per session in init. */
-  private localErrors: ChatMessage[] = []
-  private nextSeq = 1_000_000
   private sessionListeners: SessionListener[] = []
 
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -84,14 +42,6 @@ export class MessagesController {
   private seenEids = new Set<string>()
   private activeRunId: string | null = null
   private awaitingRun = false
-  /** Server-authored id of a message whose streaming step is in flight. The
-   *  delta router reads this; `message-added{streaming:true}` sets it, and a
-   *  new step (or turn end) replaces/clears it. */
-  private streamingId: string | null = null
-  /** True while a send RPC is in flight (from submit to `accepted`). Drives the
-   *  composer spinner only; the user bubble itself appears from the server's
-   *  `message-added` event. */
-  awaitingSend = $state(false)
 
   private static MAX_RECONNECT = 10
   private static INITIAL_RECONNECT = 1000
@@ -134,8 +84,31 @@ export class MessagesController {
     if (opts?.sendFailed) this.sendFailedMsg = opts.sendFailed
   }
 
+  // ---- reactive surface (delegated to the store) ----
+
+  get messages(): ChatMessage[] {
+    return this.store.messages
+  }
   get sorted(): ChatMessage[] {
-    return [...this.messages].sort(compareMessages)
+    return this.store.sorted
+  }
+  get sending(): boolean {
+    return this.store.sending
+  }
+  get loading(): boolean {
+    return this.store.loading
+  }
+  get hasMore(): boolean {
+    return this.store.hasMore
+  }
+  get pendingMailbox(): number {
+    return this.store.pendingMailbox
+  }
+  get revision(): number {
+    return this.store.revision
+  }
+  get awaitingSend(): boolean {
+    return this.store.awaitingSend
   }
 
   onSessionEvent(cb: SessionListener): () => void {
@@ -145,32 +118,8 @@ export class MessagesController {
     }
   }
 
-  private allocSeq(): number {
-    return this.nextSeq++
-  }
-
-  private notify() {
-    this.revision++
-  }
-
-  /** Only the LOCAL bubbles still in flight. */
-  private inFlightLocal(): ChatMessage[] {
-    return this.messages.filter(
-      m => m.isLocal && (m.status === 'streaming' || m.status === 'sending'),
-    )
-  }
-
-  private bumpSeqAfter(history: ChatMessage[]) {
-    let maxSeq = -1
-    for (const m of history) {
-      if (m.seq != null && m.seq < this.nextSeq && m.seq > maxSeq)
-        maxSeq = m.seq
-    }
-    if (maxSeq >= 0) this.nextSeq = maxSeq + 1
-  }
-
   init() {
-    this.localErrors = []
+    this.store.reset()
     const sid = this.getSessionId()
     if (!sid) return
     void this.boot(sid)
@@ -189,14 +138,16 @@ export class MessagesController {
   async refreshMailbox(): Promise<void> {
     const sid = this.getSessionId()
     if (!sid) {
-      this.pendingMailbox = 0
+      this.store.pendingMailbox = 0
       return
     }
     try {
       // Newest page only: pending entries are the most recent, so the badge
       // reads correctly without paging the whole queue.
       const { entries } = await this.api.mailbox(sid)
-      this.pendingMailbox = entries.filter(e => e.status !== 'consumed').length
+      this.store.pendingMailbox = entries.filter(
+        e => e.status !== 'consumed',
+      ).length
     } catch {
       /* keep the previous count */
     }
@@ -216,17 +167,17 @@ export class MessagesController {
     const trimmed = text.trim()
     if (!trimmed && !attachments.length) return
     const codes = attachments.map(a => a.code)
-    this.awaitingSend = true
-    this.notify()
+    this.store.awaitingSend = true
+    this.store.notify()
     try {
       // Resolves on the server's `accepted` event = durably in the mailbox.
       await this.api.prompt(this.getSessionId(), trimmed, codes)
-      this.awaitingSend = false
-      this.notify()
+      this.store.awaitingSend = false
+      this.store.notify()
     } catch (e) {
-      this.addError(this.sendFailedMsg(e))
-      this.awaitingSend = false
-      this.notify()
+      this.store.addError(this.sendFailedMsg(e))
+      this.store.awaitingSend = false
+      this.store.notify()
       throw e
     }
   }
@@ -240,9 +191,9 @@ export class MessagesController {
       this.syncedTipId = cached.length ? await l.serverTipId(sid) : ''
       this.syncedOldestId = cached.length ? await l.oldestCachedId(sid) : ''
       if (cached.length) {
-        this.messages = [...cached, ...this.inFlightLocal()]
-        this.renumber()
-        this.notify()
+        this.store.messages = [...cached, ...this.store.inFlightLocal()]
+        this.store.renumber()
+        this.store.notify()
       }
     } catch {
       /* cache unreadable — fall through network-only */
@@ -252,11 +203,11 @@ export class MessagesController {
   /** Incremental when we hold an anchor, else a baseline fetch. */
   private async sync(sid: string) {
     const l = this.local
-    this.loading = this.messages.length === 0
-    this.notify()
+    this.store.loading = this.store.messages.length === 0
+    this.store.notify()
     try {
       const cacheConsistent =
-        this.messages.length === 0 ||
+        this.store.messages.length === 0 ||
         (this.syncedTipId !== '' &&
           this.syncedOldestId !== '' &&
           (await l?.oldestCachedId(sid)) === this.syncedOldestId)
@@ -264,11 +215,15 @@ export class MessagesController {
         const r = await this.api.messagesAfter(sid, this.syncedTipId)
         if (r.resync) {
           await this.baseline(sid)
-        } else if (r.messages.length === 0 && this.messages.length === 0) {
+        } else if (
+          r.messages.length === 0 &&
+          this.store.messages.length === 0
+        ) {
           await this.baseline(sid)
         } else {
-          this.mergeServer(r.messages, r.tipId)
-          await l.persistMessages(sid, this.messages, r.tipId)
+          this.store.mergeServer(r.messages)
+          this.syncedTipId = r.tipId
+          await l.persistMessages(sid, this.store.messages, r.tipId)
         }
       } else {
         await this.baseline(sid)
@@ -276,8 +231,8 @@ export class MessagesController {
     } catch {
       /* offline: keep whatever the local cache showed */
     }
-    this.loading = false
-    this.notify()
+    this.store.loading = false
+    this.store.notify()
   }
 
   /** Full baseline: the newest page, replacing any cached copy. */
@@ -285,9 +240,13 @@ export class MessagesController {
     try {
       const [msgs, more] = await this.api.messages(sid, undefined, 50)
       const chat = mapMessagesToChat(msgs)
-      this.messages = [...this.inFlightLocal(), ...this.localErrors, ...chat]
-      this.renumber()
-      this.hasMore = more
+      this.store.messages = [
+        ...this.store.inFlightLocal(),
+        ...this.store.errors,
+        ...chat,
+      ]
+      this.store.renumber()
+      this.store.hasMore = more
       const l = this.local
       if (l) {
         this.syncedTipId = chat.length ? chat[chat.length - 1]!.id : ''
@@ -302,72 +261,39 @@ export class MessagesController {
     }
   }
 
-  /** Merge a server delta into memory. ASSISTANT messages are server-authored
-   *  (id and `prev_id` come from `message-added`), so a delta is an in-place
-   *  update by id — no client-side id invention, no anchor guessing. Local
-   *  error bubbles and the in-flight streamed bubble are preserved. */
-  private mergeServer(msgs: Message[], tipId: string) {
-    const chat = mapMessagesToChat(msgs)
-    // Preserve: local error bubbles, and the LIVE streamed bubble (the server
-    // copy of a step only lands AFTER its stream ends; until then the local
-    // streaming row is the only copy and must survive the merge).
-    const streaming =
-      this.messages.find(m => m.isLocal && m.id === this.streamingId) ?? null
-    const byId = new Map<string, ChatMessage>()
-    for (const m of this.messages) {
-      if (m.isLocal) continue
-      byId.set(m.id, m)
-    }
-    for (const m of chat) byId.set(m.id, m)
-    if (streaming !== null && !byId.has(streaming.id))
-      byId.set(streaming.id, streaming)
-    for (const m of this.localErrors) byId.set(`err:${m.id}`, m)
-    // Once the server holds the live step's id, the stream is over and the
-    // server row supersedes our local copy (drop the flag).
-    if (this.streamingId != null && byId.has(this.streamingId)) {
-      const s = byId.get(this.streamingId)!
-      if (!s.isLocal) this.streamingId = null
-    }
-    this.messages = [...byId.values()]
-    this.renumber()
-    this.syncedTipId = tipId
-  }
-
-  /** Re-seat `seq` from the authoritative ordering (see [orderMessages]). */
-  private renumber() {
-    this.messages = orderMessages(this.messages)
-    this.bumpSeqAfter(this.messages)
-  }
-
   private async fetchMessages(before?: string) {
-    this.loading = true
-    this.notify()
+    this.store.loading = true
+    this.store.notify()
     try {
       const sid = this.getSessionId()
       const [msgs, more] = await this.api.messages(sid, before, 50)
       const chat = mapMessagesToChat(msgs)
       if (before != null) {
-        const existing = new Set(this.messages.map(m => m.id))
-        this.messages = [
+        const existing = new Set(this.store.messages.map(m => m.id))
+        this.store.messages = [
           ...chat.filter(m => !existing.has(m.id)),
-          ...this.messages,
+          ...this.store.messages,
         ]
       } else {
-        this.messages = [...this.inFlightLocal(), ...this.localErrors, ...chat]
+        this.store.messages = [
+          ...this.store.inFlightLocal(),
+          ...this.store.errors,
+          ...chat,
+        ]
       }
-      this.renumber()
-      this.hasMore = more
+      this.store.renumber()
+      this.store.hasMore = more
     } catch {
       /* keep current view */
     }
-    this.loading = false
-    this.notify()
+    this.store.loading = false
+    this.store.notify()
     const l = this.local
     if (l) {
       try {
         await l.persistMessages(
           this.getSessionId(),
-          this.messages,
+          this.store.messages,
           this.syncedTipId,
         )
         this.syncedOldestId = await l.oldestCachedId(this.getSessionId())
@@ -384,8 +310,8 @@ export class MessagesController {
     try {
       const [status] = await this.api.state(this.getSessionId())
       if (status === 'busy' || status === 'running') {
-        this.sending = true
-        this.notify()
+        this.store.sending = true
+        this.store.notify()
       }
     } catch {
       /* offline */
@@ -444,7 +370,7 @@ export class MessagesController {
   private startWatchdog() {
     this.watchdogTimer && clearInterval(this.watchdogTimer)
     this.watchdogTimer = setInterval(() => {
-      if (!this.sending) return
+      if (!this.store.sending) return
       if (
         Date.now() - this.lastStreamEventAt <
         MessagesController.STREAM_STALE_MS
@@ -517,16 +443,9 @@ export class MessagesController {
     }
   }
 
-  /** A run ended (or a new one began): drop any still-streaming local bubble.
-   *  Streamed assistant bubbles are server-authored (their id is a real server
-   *  id), so if the server already holds that row `mergeServer` keeps it; an
-   *  orphan (never persisted) is removed here. */
+  /** Drop any still-streaming local bubble and leave the active run. */
   private clearStreaming() {
-    if (this.streamingId != null) {
-      const id = this.streamingId
-      this.messages = this.messages.filter(m => !(m.isLocal && m.id === id))
-      this.streamingId = null
-    }
+    this.store.clearStreaming()
     this.activeRunId = null
   }
 
@@ -552,9 +471,9 @@ export class MessagesController {
         .state(this.getSessionId())
         .then(([st]) => {
           if (st === 'busy' || st === 'running') {
-            if (!this.sending) {
-              this.sending = true
-              this.notify()
+            if (!this.store.sending) {
+              this.store.sending = true
+              this.store.notify()
             }
           } else {
             // Idle on the server: converge and PULL anything the stream missed
@@ -569,7 +488,7 @@ export class MessagesController {
 
   /** Converge to idle if the stream ended without a terminal event. */
   private syncIdle() {
-    if (!this.sending) return
+    if (!this.store.sending) return
     this.finishStreaming()
   }
 
@@ -598,476 +517,20 @@ export class MessagesController {
         /* listener errors are not fatal */
       }
     }
-    const { event, params } = ev
-    // Every streamed part belongs to the assistant step named by its
-    // server-authored `message_id` (stamped by the agent on each part). Route
-    // by that id; never invent one.
-    const streamMsgId = (): string | null => {
-      const id = params['message_id']
-      return typeof id === 'string' && id !== '' ? id : this.streamingId
-    }
-    switch (event) {
-      case 'start-step':
-      case 'text-start':
-      case 'reasoning-start':
-      case 'tool-input-start': {
-        const sid = streamMsgId()
-        if (sid == null) break
-        this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
-        if (event === 'text-start' && params['id'] != null) {
-          this.ensurePart(sid, params['id'] as string, 'text')
-        } else if (event === 'reasoning-start' && params['id'] != null) {
-          this.ensurePart(sid, `r${params['id']}`, 'reasoning')
-        } else if (event === 'tool-input-start' && params['id'] != null) {
-          this.startToolPart(
-            sid,
-            params['id'] as string,
-            (params['toolName'] ?? params['name'] ?? 'tool') as string,
-          )
-        }
-        break
-      }
-      case 'tool-input-delta': {
-        if (params['id'] != null && params['delta'] != null) {
-          this.appendToolInput(
-            params['id'] as string,
-            String(params['delta'] ?? ''),
-          )
-        }
-        break
-      }
-      case 'text-delta':
-        if (params['id'] != null && params['text'] != null) {
-          const sid = streamMsgId()
-          if (sid == null) break
-          this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
-          this.appendDelta(
-            sid,
-            params['id'] as string,
-            String(params['text'] ?? ''),
-            false,
-          )
-        }
-        break
-      case 'reasoning-delta':
-        if (params['id'] != null && params['text'] != null) {
-          const sid = streamMsgId()
-          if (sid == null) break
-          this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
-          this.appendDelta(
-            sid,
-            `r${params['id']}`,
-            String(params['text'] ?? ''),
-            true,
-          )
-        }
-        break
-      case 'tool-call': {
-        const sid = streamMsgId()
-        if (sid == null) break
-        this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
-        const tcId = (params['toolCallId'] ?? params['id']) as
-          | string
-          | undefined
-        if (tcId != null) {
-          this.addToolPart(
-            sid,
-            tcId,
-            (params['toolName'] ?? params['name'] ?? 'tool') as string,
-            params['input'],
-          )
-        }
-        break
-      }
-      case 'tool-result': {
-        const tcId = (params['toolCallId'] ?? params['id']) as
-          | string
-          | undefined
-        if (tcId == null) break
-        this.updateToolResult(
-          tcId,
-          params['formatted'] ?? params['output'] ?? params['result'],
-          {
-            errorMsg: undefined,
-            changeId: params['change_id'] as string | undefined,
-            diff: params['diff'] as string | undefined,
-            additions: params['additions'] as number | undefined,
-            deletions: params['deletions'] as number | undefined,
-            data: (params['data'] as Record<string, unknown>) ?? undefined,
-          },
-        )
-        break
-      }
-      case 'tool-error': {
-        const tcId = (params['toolCallId'] ?? params['id']) as
-          | string
-          | undefined
-        const errObj = params['error']
-        const errMsg = (
-          typeof errObj === 'string'
-            ? errObj
-            : errObj && typeof errObj === 'object'
-              ? ((errObj as Record<string, unknown>)['message'] ??
-                params['message'] ??
-                'tool error')
-              : (params['message'] ?? 'tool error')
-        ) as string
-        if (tcId != null)
-          this.updateToolResult(tcId, null, { errorMsg: errMsg })
-        break
-      }
-      case 'tool-output-denied': {
-        const tcId = (params['toolCallId'] ?? params['id']) as
-          | string
-          | undefined
-        if (tcId != null)
-          this.updateToolResult(tcId, null, { errorMsg: 'denied' })
-        break
-      }
-      case 'file':
-      case 'reasoning-file': {
-        // A streamed media part the agent has already offloaded to the blob
-        // store; `code` is the file:<code> segment. Render it as a file part
-        // (same path as persisted file parts). Both `file` and
-        // `reasoning-file` are shown.
-        const code = params['code'] as string | undefined
-        if (code == null || code === '') break
-        const sid = streamMsgId()
-        if (sid == null) break
-        this.ensureStreamingMsg(sid, params['prev_id'] as string | undefined)
-        const partId = `f${code}`
-        const existing = this.messages
-          .find(m => m.id === sid)
-          ?.parts.some(p => p.id === partId)
-        if (!existing) {
-          this.setMsg(sid, m => ({
-            ...m,
-            parts: [
-              ...m.parts,
-              {
-                id: partId,
-                type: 'file',
-                text: '',
-                tool: '',
-                code,
-                name: (params['name'] as string | undefined) ?? null,
-                mime: (params['mediaType'] as string | undefined) ?? null,
-                size: params['size'] != null ? Number(params['size']) : null,
-                width: params['width'] != null ? Number(params['width']) : null,
-                height:
-                  params['height'] != null ? Number(params['height']) : null,
-                durationMs:
-                  params['durationMs'] != null
-                    ? Number(params['durationMs'])
-                    : params['duration_ms'] != null
-                      ? Number(params['duration_ms'])
-                      : null,
-                thumbCode:
-                  (params['thumbCode'] as string | undefined) ??
-                  (params['thumb_code'] as string | undefined) ??
-                  null,
-                thumbhash: (params['thumbhash'] as string | undefined) ?? null,
-              },
-            ],
-          }))
-        }
-        break
-      }
-      case 'turn-complete':
-        this.finishStreaming()
-        void this.refreshMailbox()
-        break
-      case 'message-added': {
-        // The server authored this message's id and chain anchor. This is the
-        // ONLY place user bubbles are created (no client-side optimistic
-        // bubble): a trigger shows up here once the agent has drained the
-        // mailbox and written the chain row. `streaming:true` opens the
-        // assistant step's bubble; its deltas then arrive under the same id.
-        const addedId =
-          typeof params['message_id'] === 'string' ? params['message_id'] : ''
-        const prevId =
-          typeof params['prev_id'] === 'string' ? params['prev_id'] : ''
-        const role =
-          typeof params['role'] === 'string' ? params['role'] : 'assistant'
-        const streaming = params['streaming'] === true
-        const src = typeof params['source'] === 'string' ? params['source'] : ''
-        if (addedId !== '') {
-          if (streaming && role === 'assistant') {
-            // A new step begins: any PRIOR streaming bubble is done (the server
-            // persists one message per step and has moved on).
-            const prevStream = this.streamingId
-            if (prevStream != null && prevStream !== addedId) {
-              this.messages = this.messages.map(m =>
-                m.id === prevStream && m.status === 'streaming'
-                  ? { ...m, status: 'complete' as const }
-                  : m,
-              )
-            }
-            this.streamingId = addedId
-            this.ensureStreamingMsg(addedId, prevId)
-          } else if (role === 'user') {
-            // The prompt was persisted into the chain: render the user bubble
-            // with the server-authored id/position. (The composer spinner is
-            // unrelated — it already stopped at `accepted`.)
-            this.upsertServerMessage(addedId, prevId, 'user', src)
-          }
-        }
-        this.notify()
-        void this.reconcile()
-        // A drained trigger is now CONSUMED, so the pending badge shrinks.
-        void this.refreshMailbox()
-        break
-      }
-      case 'chain-changed':
-        this.clearStreaming()
-        this.sending = false
-        this.notify()
-        void this.fetchMessages()
-        break
-      case 'status': {
-        const stype = params['type']
-        if (stype === 'busy' || stype === 'running') {
-          this.sending = true
-          this.notify()
-        } else {
-          this.finishStreaming()
-        }
-        break
-      }
-      case 'error':
-      case 'provider-error': {
-        const errObj = params['error']
-        const content = (
-          typeof errObj === 'string'
-            ? errObj
-            : errObj && typeof errObj === 'object'
-              ? ((errObj as Record<string, unknown>)['message'] ??
-                params['message'] ??
-                'Unknown error')
-              : (params['message'] ?? 'Unknown error')
-        ) as string
-        this.addError(content)
-        this.sending = false
-        this.notify()
-        break
-      }
-      default:
-        break
-    }
-  }
-
-  /** Ensure a streamed assistant bubble exists under the SERVER-authored id.
-   *  No id is minted here; `id` comes from `message-added`/the delta's
-   *  `message_id`, and `prevId` is the server's `prev_id` (known at step
-   *  start). Reuses the existing bubble if present (a delta may arrive before
-   *  the formal `message-added{streaming:true}` on replay). */
-  private ensureStreamingMsg(id: string, prevId?: string): string {
-    const existing = this.messages.find(m => m.id === id)
-    if (existing) {
-      if (!existing.isLocal) return id
-      if (existing.status === 'streaming') return id
-      // Was finalized by a previous step's boundary; reopen it.
-      this.messages = this.messages.map(m =>
-        m.id === id ? { ...m, status: 'streaming' as const } : m,
-      )
-      return id
-    }
-    this.streamingId = id
-    this.messages = [
-      ...this.messages,
-      {
-        id,
-        role: 'assistant',
-        status: 'streaming',
-        parts: [],
-        createdAt: new Date().toISOString(),
-        isLocal: true,
-        prevId: prevId ?? '',
-        source: '',
-        seq: this.allocSeq(),
-      },
-    ]
-    return id
-  }
-
-  /** Create a minimal server-authored bubble (used for a user message whose
-   *  full body is fetched by the following `reconcile`). */
-  private upsertServerMessage(
-    id: string,
-    prevId: string,
-    role: string,
-    source = '',
-  ): void {
-    if (this.messages.some(m => m.id === id)) return
-    this.messages = [
-      ...this.messages,
-      {
-        id,
-        role,
-        status: 'complete',
-        parts: [],
-        createdAt: new Date().toISOString(),
-        isLocal: false,
-        prevId,
-        source,
-        seq: this.allocSeq(),
-      },
-    ]
-  }
-
-  private setMsg(id: string, fn: (m: ChatMessage) => ChatMessage) {
-    const idx = this.messages.findIndex(m => m.id === id)
-    if (idx < 0) return
-    this.messages[idx] = fn(this.messages[idx]!)
-    this.notify()
-  }
-
-  private ensurePart(msgId: string, partId: string, type: string) {
-    this.setMsg(msgId, m =>
-      m.parts.some(p => p.id === partId)
-        ? m
-        : {
-            ...m,
-            parts: [...m.parts, { id: partId, type, text: '', tool: '' }],
-          },
-    )
-  }
-
-  private appendDelta(
-    msgId: string,
-    partId: string,
-    delta: string,
-    reasoning: boolean,
-  ) {
-    this.setMsg(msgId, m => {
-      const pidx = m.parts.findIndex(p => p.id === partId)
-      const parts = [...m.parts]
-      if (pidx >= 0) {
-        parts[pidx] = { ...parts[pidx]!, text: parts[pidx]!.text + delta }
-      } else {
-        parts.push({
-          id: partId,
-          type: reasoning ? 'reasoning' : 'text',
-          text: delta,
-          tool: '',
-        })
-      }
-      return { ...m, parts }
+    // Translate the event into store mutations (pure router, see message-events).
+    applyStreamEvent(this.store, ev.event, ev.params, {
+      finishStreaming: () => this.finishStreaming(),
+      refreshMailbox: () => void this.refreshMailbox(),
+      reconcile: () => void this.reconcile(),
+      clearStreaming: () => this.clearStreaming(),
+      fetchMessages: () => void this.fetchMessages(),
     })
   }
-
-  /** Create the tool part as soon as argument streaming begins. */
-  private startToolPart(msgId: string, partId: string, name: string) {
-    this.setMsg(msgId, m => {
-      if (m.parts.some(p => p.id === partId)) return m
-      const state: ToolState = { status: 'running', title: name, inputText: '' }
-      const part: ChatPart = {
-        id: partId,
-        type: 'tool',
-        text: '',
-        tool: name,
-        state,
-      }
-      return { ...m, parts: [...m.parts, part] }
-    })
-  }
-
-  /** Accumulate streamed tool-argument JSON for the live preview. */
-  private appendToolInput(partId: string, delta: string) {
-    const sid = this.streamingId
-    if (!sid) return
-    this.setMsg(sid, m => {
-      const parts = m.parts.map(p => {
-        if (p.id !== partId) return p
-        const old: ToolState = p.state ?? { status: '', title: '' }
-        return {
-          ...p,
-          state: { ...old, inputText: (old.inputText ?? '') + delta },
-        }
-      })
-      return { ...m, parts }
-    })
-  }
-
-  private addToolPart(
-    msgId: string,
-    partId: string,
-    name: string,
-    input: unknown,
-  ) {
-    const asMap =
-      input && typeof input === 'object' && !Array.isArray(input)
-        ? (input as Record<string, unknown>)
-        : null
-    const state: ToolState = { status: 'running', title: name, input: asMap }
-    this.setMsg(msgId, m => {
-      const pidx = m.parts.findIndex(p => p.id === partId)
-      const parts = [...m.parts]
-      const part: ChatPart = {
-        id: partId,
-        type: 'tool',
-        text: '',
-        tool: name,
-        state,
-      }
-      if (pidx >= 0) parts[pidx] = part
-      else parts.push(part)
-      return { ...m, parts }
-    })
-  }
-
-  private updateToolResult(
-    partId: string,
-    result: unknown,
-    extra: {
-      errorMsg?: string
-      changeId?: string
-      diff?: string
-      additions?: number
-      deletions?: number
-      data?: Record<string, unknown>
-    } = {},
-  ) {
-    const sid = this.streamingId
-    if (!sid) return
-    this.setMsg(sid, m => {
-      const parts = m.parts.map(p => {
-        if (p.id !== partId) return p
-        const old = p.state ?? { status: '', title: '' }
-        const output =
-          typeof result === 'string'
-            ? result
-            : result == null
-              ? null
-              : pretty(result)
-        return {
-          ...p,
-          state: {
-            status: extra.errorMsg != null ? 'error' : 'complete',
-            title: old.title,
-            error: extra.errorMsg ?? old.error ?? null,
-            input: old.input ?? null,
-            output: output ?? old.output ?? null,
-            data: extra.data ?? old.data ?? null,
-            changeId: extra.changeId ?? old.changeId ?? null,
-            diff: extra.diff ?? old.diff ?? null,
-            additions: extra.additions ?? old.additions ?? null,
-            deletions: extra.deletions ?? old.deletions ?? null,
-          } satisfies ToolState,
-        }
-      })
-      return { ...m, parts }
-    })
-  }
-
+  /** Mark every streaming bubble complete, leave the busy state, and pull the
+   *  authoritative delta. */
   private finishStreaming() {
-    this.messages = this.messages.map(m =>
-      m.status === 'streaming' ? { ...m, status: 'complete' as const } : m,
-    )
-    this.streamingId = null
+    this.store.finishStreaming()
     this.activeRunId = null
-    this.sending = false
-    this.notify()
     void this.reconcile()
   }
 
@@ -1087,32 +550,16 @@ export class MessagesController {
         await this.baseline(sid)
         return
       }
-      this.mergeServer(r.messages, r.tipId)
-      this.notify()
+      this.store.mergeServer(r.messages)
+      this.syncedTipId = r.tipId
+      this.store.notify()
       if (l) {
-        await l.persistMessages(sid, this.messages, this.syncedTipId)
+        await l.persistMessages(sid, this.store.messages, this.syncedTipId)
         this.syncedOldestId = await l.oldestCachedId(sid)
       }
     } catch {
       /* offline reconcile retry on next turn */
     }
-  }
-
-  private addError(text: string) {
-    const now = Date.now()
-    const err = {
-      id: `err${now}`,
-      role: 'error',
-      status: 'error' as const,
-      isLocal: true,
-      parts: [{ id: `p${now}`, type: 'text' as const, text, tool: '' }],
-      createdAt: new Date().toISOString(),
-      prevId: '',
-      source: '',
-      seq: this.allocSeq(),
-    }
-    this.localErrors.push(err)
-    this.messages = [...this.messages, err]
   }
 
   stop() {
@@ -1122,12 +569,12 @@ export class MessagesController {
   }
 
   async revert(messageId: string) {
-    if (this.sending) {
+    if (this.store.sending) {
       await this.api.interrupt(this.getSessionId())
     }
     await this.api.revert(this.getSessionId(), messageId)
     this.clearStreaming()
-    this.sending = false
+    this.store.sending = false
     await this.fetchMessages()
   }
 
@@ -1135,7 +582,7 @@ export class MessagesController {
   async resendFrom(msg: ChatMessage, text: string) {
     const trimmed = text.trim()
     if (!trimmed) return
-    if (this.sending) {
+    if (this.store.sending) {
       await this.api.interrupt(this.getSessionId())
     }
     const codes = msg.parts
@@ -1144,7 +591,7 @@ export class MessagesController {
       .filter(c => !!c)
     await this.api.revert(this.getSessionId(), msg.id)
     this.clearStreaming()
-    this.sending = false
+    this.store.sending = false
     await this.fetchMessages()
     await this.deliver(
       trimmed,
@@ -1153,8 +600,8 @@ export class MessagesController {
   }
 
   async loadMore() {
-    if (!this.hasMore || this.loading) return
-    const first = this.sorted[0]
+    if (!this.store.hasMore || this.store.loading) return
+    const first = this.store.sorted[0]
     if (!first) return
     await this.fetchMessages(first.id)
   }
@@ -1169,9 +616,4 @@ export class MessagesController {
     this.streamAbort?.abort()
     this.streamAbort = null
   }
-}
-
-function pretty(o: unknown): string {
-  if (typeof o === 'object' && o != null) return JSON.stringify(o, null, 2)
-  return String(o)
 }
