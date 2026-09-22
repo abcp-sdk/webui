@@ -14,6 +14,7 @@
   import type { ModelInfo, Preset, ProviderInfo, Session, UploadedFile } from '$lib/models'
   import { modelRefOf, sessionName } from '$lib/models'
   import { buildModelOptions, fmtContext, fmtElapsed, variantsFor } from '$lib/chat-helpers'
+  import { composerAction } from '$lib/composer-action'
   import { VoiceRecorder } from '$lib/voice'
   import { cn } from '$lib/utils'
   import IconButton from '$lib/components/layout/IconButton.svelte'
@@ -210,14 +211,22 @@
   // running on the server. A running turn is exactly when the envelope
   // (deliver-to-mailbox) is shown and expected to WORK; gating on
   // `ctrl.sending` made the mailbox button a no-op while a turn ran.
-  function canSend(): boolean {
-    return (
-      (!!text.trim() || attachments.some(a => a.code)) &&
-      !!ctrl &&
-      !ctrl.sending &&
-      !ctrl.awaitingSend
-    )
-  }
+  const hasContent = $derived(!!text.trim() || attachments.some(a => a.code))
+
+  // The one action circle's state, resolved from the flags (composer-action.ts
+  // owns the precedence). `deliver` outranks `stop` while a turn runs.
+  const action = $derived(
+    composerAction({
+      awaitingSend: ctrl?.awaitingSend ?? false,
+      sending: ctrl?.sending ?? false,
+      canDeliver: !!(
+        ctrl?.sending &&
+        (text.trim() || attachments.length)
+      ),
+      submitting,
+      canSend: hasContent && !!ctrl && !ctrl.sending && !ctrl.awaitingSend,
+    }),
+  )
 
   // ---- deliver-to-mailbox animation ----
   let envelopeBtnEl: HTMLElement | null = $state(null)
@@ -817,12 +826,12 @@
              STOP form; the moment the user types/records, it morphs into the
              ENVELOPE (deliver to mailbox). Otherwise: blue send / muted
              attach, never a solid colored fill. -->
-        {#if ctrl.awaitingSend}
+        {#if action === 'awaiting-send'}
           <!-- A prompt is en route to the mailbox (RPC then server confirm):
                the composer is locked and shows a spinner until the user
                bubble appears from the server's message-added event. -->
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span></button>
-        {:else if ctrl.sending && canDeliver()}
+        {:else if action === 'deliver'}
           <button
             type="button"
             bind:this={envelopeBtnEl}
@@ -831,11 +840,11 @@
             aria-label={t('deliver')}
             onclick={() => void submit()}
           ><AppIcons.mail class="size-5" /></button>
-        {:else if ctrl.sending}
+        {:else if action === 'stop'}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-destructive bg-card text-destructive" title={t('abort')} aria-label={t('abort')} onclick={() => ctrl!.stop()}><AppIcons.stop class="size-5" /></button>
-        {:else if submitting}
+        {:else if action === 'submitting'}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary" title={t('connecting')} aria-label={t('connecting')} disabled><span class="block size-5 animate-spin rounded-full border-2 border-primary/30 border-t-primary"></span></button>
-        {:else if canSend()}
+        {:else if action === 'send'}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-primary bg-card text-primary disabled:opacity-40" title={t('send')} aria-label={t('send')} onclick={() => void submit()}><AppIcons.send class="size-5" /></button>
         {:else}
           <button type="button" class="flex size-[42px] shrink-0 items-center justify-center rounded-full border border-border bg-card text-muted-foreground" title={t('attach')} aria-label={t('attach')} onclick={() => (attachOpen = true)}><AppIcons.add class="size-5" /></button>
