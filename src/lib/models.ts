@@ -272,61 +272,6 @@ export interface ToolConfig {
   scope: string // global | session
 }
 
-export interface ToolParam {
-  name: string
-  type: string
-  description: string
-  required: boolean
-  enumValues?: string[] | null
-  children: ToolParam[]
-  defaultValue?: string | null
-}
-
-export function parseToolParams(
-  schema?: Record<string, unknown> | null,
-): ToolParam[] {
-  if (!schema) return []
-  const properties = schema['properties']
-  if (!properties || typeof properties !== 'object') return []
-  const requiredList = new Set(
-    Array.isArray(schema['required']) ? schema['required'].map(String) : [],
-  )
-  const out: ToolParam[] = []
-  for (const [key, value] of Object.entries(
-    properties as Record<string, unknown>,
-  )) {
-    if (!value || typeof value !== 'object') continue
-    const v = value as Record<string, unknown>
-    const type = (v['type'] as string) || 'object'
-    const children: ToolParam[] = []
-    const items = v['items']
-    if (items && typeof items === 'object') {
-      const im = items as Record<string, unknown>
-      if (im['type'] === 'array' || (im['properties'] as object | undefined)) {
-        children.push(
-          ...parseToolParams({
-            type: 'object',
-            properties: im['properties'],
-            required: im['required'],
-          }),
-        )
-      }
-    } else if (type === 'object' && v['properties']) {
-      children.push(...parseToolParams(v))
-    }
-    out.push({
-      name: key,
-      type,
-      description: (v['description'] as string) || '',
-      required: requiredList.has(key),
-      enumValues: Array.isArray(v['enum']) ? v['enum'].map(String) : null,
-      defaultValue: v['default'] == null ? null : String(v['default']),
-      children,
-    })
-  }
-  return out
-}
-
 export interface ToolInfo {
   name: string
   description: string
