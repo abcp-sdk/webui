@@ -7,6 +7,7 @@
   import { showErrorToast, showToast } from '$lib/toast.svelte'
   import { promptDialog, confirmDialog } from '$lib/dialogs'
   import { sessionName } from '$lib/models'
+  import { previewLabel } from '$lib/api-mappers'
   import SessionRow from '$lib/components/SessionRow.svelte'
   import ContextMenu, { type ContextMenuItem } from '$lib/components/ContextMenu.svelte'
   import type { MenuAnchor } from '$lib/context-menu-position'
@@ -254,7 +255,7 @@
         <SessionRow
           session={s}
           isActive={s.id === store.activeSessionId}
-          subtitle={s.lastMessagePreview || s.id}
+          subtitle={previewLabel(s.lastMessagePreview) || s.id}
           unread={store.isUnread(s)}
           unreadCount={store.unreadCountFor(s)}
           selectable={selectMode}
