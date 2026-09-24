@@ -198,6 +198,21 @@ export function applyStreamEvent(
       }
       break
     }
+    case 'retry': {
+      // The server is retrying the CURRENT streaming step after a transient
+      // provider failure (mid-stream disconnect / 429 / 5xx). It reuses the
+      // same message id, so we CLEAR the partial parts of that bubble and mark
+      // it retrying — otherwise the two attempts' text would concatenate.
+      const rid =
+        typeof params['message_id'] === 'string' && params['message_id'] !== ''
+          ? (params['message_id'] as string)
+          : store.streamingId
+      if (rid == null) break
+      const attempt = Number(params['attempt'] ?? 0) || 0
+      const delayMs = Number(params['delay_ms'] ?? 0) || 0
+      store.markRetrying(rid, attempt, delayMs)
+      break
+    }
     case 'compacted': {
       // A compaction checkpoint was created (or there was nothing to fold).
       // The checkpoint is a PERSISTED chain message, so pull the chain to
