@@ -17,7 +17,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@abcp/agent-sdk": "github:abcp-sdk/agent-sdk-typescript#v0.24.0",
+    "@abcp/agent-sdk": "github:abcp-sdk/agent-sdk-typescript#v0.25.0",
     "@connectrpc/connect": "^2.2.0",
     "@connectrpc/connect-web": "^2.2.0",
     "@lucide/svelte": "^1.42.0",

@@ -159,6 +159,15 @@
       <span class="min-w-0 flex-1 truncate text-meta font-semibold" class:text-primary={isActive}
         >{sessionName(session)}</span
       >
+      {#if session.status === 'busy'}
+        <!-- Runtime status from the server's run lease: a turn is running
+             (including mid-retry). Animated so a list scan finds it. -->
+        <span
+          class="ml-1 size-2 shrink-0 animate-pulse rounded-full bg-primary"
+          title={t('running')}
+          aria-label={t('running')}
+        ></span>
+      {/if}
       {#if session.group && !isChild}
         <span class="ml-1 shrink-0 rounded-full bg-primary/14 px-1.5 py-px text-[9px] leading-none text-primary"
           >{t('subsessionBadge')}</span

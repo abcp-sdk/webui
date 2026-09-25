@@ -81,6 +81,7 @@ export function sessionFromPb(s: import('@abcp/agent-sdk').Session): Session {
     lastMessagePreview: s.lastMessagePreview,
     messageSeq: s.messageSeq,
     group: s.group,
+    status: s.status === 'busy' ? 'busy' : 'idle',
   }
 }
 
