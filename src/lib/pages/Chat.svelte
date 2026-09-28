@@ -69,6 +69,7 @@
   let followBottom = $state(true)
 
   let listEl: HTMLElement | null = $state(null)
+  let contentEl: HTMLElement | null = $state(null)
   let taEl: HTMLTextAreaElement | null = $state(null)
   const recorder = new VoiceRecorder()
 
@@ -133,23 +134,55 @@
 
   // ---- scroll behaviour ----
 
+  /** Programmatic scrolls must not be read as a user scroll (which would clear
+   *  `followBottom`); this guard suppresses the next onScroll-driven update. */
+  let autoScrolling = false
+  function scrollToBottom() {
+    if (!listEl) return
+    autoScrolling = true
+    listEl.scrollTop = listEl.scrollHeight
+    requestAnimationFrame(() => {
+      autoScrolling = false
+    })
+  }
+
   function onScroll() {
     if (!listEl) return
     const nearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 80
-    followBottom = nearBottom
+    if (!autoScrolling) followBottom = nearBottom
     if (listEl.scrollTop < 60 && ctrl?.hasMore && !ctrl.loading) {
       void ctrl.loadMore()
     }
   }
 
+  // Reset follow state when the OPEN SESSION changes. The Chat pane is reused
+  // across sessions (keyed `chat_session`), so a stale `followBottom=false`
+  // from a previous session would otherwise leave the new one stuck mid-list.
+  $effect(() => {
+    void sid
+    followBottom = true
+  })
+
+  // Converging stick-to-bottom: while following, keep the viewport pinned to
+  // the tail as content grows AFTER the jump (async re-layout, image/media
+  // load, tool cards expanding, content-visibility reflow). A single
+  // `scrollTop = scrollHeight` is not enough — `scrollHeight` grows a frame or
+  // more later, which is what stranded long sessions mid-list. The observer is
+  // created ONCE for the list's lifetime (not per revision).
+  $effect(() => {
+    const el = contentEl
+    if (!el) return
+    const ro = new ResizeObserver(() => {
+      if (followBottom) scrollToBottom()
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  })
+
   $effect(() => {
     if (!ctrl || !listEl) return
     void ctrl.revision
-    if (followBottom) {
-      requestAnimationFrame(() => {
-        if (listEl) listEl.scrollTop = listEl.scrollHeight
-      })
-    }
+    if (followBottom) scrollToBottom()
   })
 
   // ---- draft persistence ----
@@ -666,6 +699,7 @@
 
     <!-- messages -->
     <div bind:this={listEl} class="min-h-0 flex-1 overflow-y-auto px-3 py-3" onscroll={onScroll}>
+      <div bind:this={contentEl}>
       {#if ctrl.loading && ctrl.messages.length === 0}
         <div class="flex h-full items-center justify-center">
           <span class="size-6 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-muted-foreground"></span>
@@ -695,6 +729,7 @@
           />
         {/each}
       {/if}
+      </div>
     </div>
 
     <!-- composer -->
