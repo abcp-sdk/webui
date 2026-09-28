@@ -21,7 +21,6 @@ import {
   type SessionOverlay,
   type SiderTab,
 } from './nav'
-import { Prefs } from './prefs'
 import { sortSessionsByRecency } from './session-order'
 import { showErrorToast } from './toast.svelte'
 
@@ -38,9 +37,6 @@ export class AppStore {
   sessionOverlay = $state<SessionOverlay | null>(null)
 
   sessionRevision = $state(0)
-
-  /** session → last read message_seq (client-local). */
-  readSeqs: Record<string, number> = $state({})
 
   /** Per-session composer drafts, surviving navigation. */
   chatDrafts = $state<Record<string, ChatDraft>>({})
@@ -76,7 +72,6 @@ export class AppStore {
   private sessionAbort: AbortController | null = null
   private sessionTimer: ReturnType<typeof setTimeout> | null = null
   private sessionAttempt = 0
-  private firstSnapshot = true
 
   constructor(api: AgentApi, local: LocalStore | null) {
     this.api = api
@@ -89,10 +84,6 @@ export class AppStore {
     const l = this.local
     if (!l) return
     try {
-      // MERGE (never clobber): the stream's first snapshot can land before this
-      // read resolves, and that snapshot seeds read watermarks — overriding the
-      // in-memory map with the older DB copy would flash every row as unread.
-      this.readSeqs = { ...(await l.loadReadSeqs()), ...this.readSeqs }
       this.chatDrafts = await l.loadDrafts()
     } catch {
       /* network-only fallback */
@@ -155,20 +146,6 @@ export class AppStore {
     connection.sessions = false
     if (snapshot) {
       this.setSessions(upserts)
-      // First ever snapshot on this device: seed read watermarks so historical
-      // sessions don't pop as unread; new ones start unread at 0.
-      if (this.firstSnapshot) {
-        this.firstSnapshot = false
-        for (const s of this.sessions) {
-          if (!(s.id in this.readSeqs)) {
-            this.readSeqs[s.id] = s.messageSeq
-            // Mirror to the local DB: a cold start whose DB read loses the race
-            // must not repopulate from an empty table and flash unread again.
-            void this.local?.setReadSeq(s.id, s.messageSeq)
-          }
-        }
-        Prefs.saveReadSeqs(this.readSeqs)
-      }
     } else {
       const next = [...this.sessions]
       for (const s of upserts) {
@@ -179,13 +156,6 @@ export class AppStore {
       this.setSessions(
         removed.length ? next.filter(s => !removed.includes(s.id)) : next,
       )
-    }
-    // The open session is being read live: advance its watermark so returning
-    // to the list shows no stale badge.
-    const active = this.activeSession
-    if (active && (this.readSeqs[active.id] ?? -1) < active.messageSeq) {
-      this.readSeqs[active.id] = active.messageSeq
-      Prefs.saveReadSeqs(this.readSeqs)
     }
   }
 
@@ -256,21 +226,24 @@ export class AppStore {
     this.pushPage({ kind: 'chat_session', key: 'chat_session' })
   }
 
-  /** Read state is CLIENT-LOCAL: record a per-session read watermark. */
+  /** Mark a session read: the SERVER owns the shared watermark (`read_seq`), so
+   *  this advances it and adopts the returned Session (unreadCount → 0). The
+   *  clear propagates to every device via `WatchSessions`. Best-effort: a failed
+   *  RPC leaves the badge until the next list refresh. */
   markSessionRead(id: string) {
-    const seq = this.sessionById(id)?.messageSeq ?? this.readSeqs[id] ?? 0
-    this.readSeqs[id] = seq
-    Prefs.saveReadSeqs(this.readSeqs)
-    void this.local?.setReadSeq(id, seq)
-    this.sessions = this.sessions.map(s =>
-      s.id === id ? { ...s, unreadCount: 0 } : s,
-    )
+    void this.api
+      .markRead(id)
+      .then(updated => {
+        this.sessions = this.sessions.map(s =>
+          s.id === id ? { ...s, unreadCount: updated.unreadCount ?? 0 } : s,
+        )
+      })
+      .catch(() => {})
   }
 
+  /** The SERVER-authoritative unread count (shared read watermark). */
   unreadCountFor(s: Session): number {
-    const read = this.readSeqs[s.id]
-    if (read == null) return s.messageSeq
-    return Math.max(0, s.messageSeq - read)
+    return Math.max(0, s.unreadCount ?? 0)
   }
 
   isUnread(s: Session): boolean {
