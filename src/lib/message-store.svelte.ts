@@ -20,6 +20,11 @@ import type { ChatMessage, Message } from './models'
 export class MessageStore {
   messages = $state<ChatMessage[]>([])
   sending = $state(false)
+  /** Server-authoritative runtime status of the OPEN session, seeded by the
+   *  watchSession stream's `status` snapshot frame (and updated by live
+   *  `status` events). 'unknown' = the lease could not be read. Kept in sync
+   *  with the session LIST's badge so the two lamps never disagree. */
+  runtimeStatus = $state<'busy' | 'idle' | 'unknown'>('idle')
   loading = $state(false)
   hasMore = $state(false)
 
@@ -60,6 +65,9 @@ export class MessageStore {
   /** Reset per-session local state (error bubbles). */
   reset() {
     this.localErrors = []
+    // The runtime status belongs to the previous session; the new stream's
+    // snapshot frame re-seeds it.
+    this.runtimeStatus = 'idle'
   }
 
   /** Drop every local error bubble. Called when the user sends a new prompt:

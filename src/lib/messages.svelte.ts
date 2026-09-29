@@ -64,6 +64,7 @@ export class MessagesController {
       onIdle: () => this.syncIdleAndPull(),
       onStreamClosed: () => this.syncIdle(),
       onBusy: () => {
+        this.store.runtimeStatus = 'busy'
         if (!this.store.sending) {
           this.store.sending = true
           this.store.notify()
@@ -88,6 +89,11 @@ export class MessagesController {
   }
   get sending(): boolean {
     return this.store.sending
+  }
+  /** Server-authoritative runtime status of the open session (busy/idle/
+   *  unknown) — drives the chat header lamp, in sync with the session list. */
+  get runtimeStatus(): 'busy' | 'idle' | 'unknown' {
+    return this.store.runtimeStatus
   }
   get loading(): boolean {
     return this.store.loading
@@ -191,7 +197,9 @@ export class MessagesController {
     // its deltas, so no client-invented placeholder is needed here.
     try {
       const [status] = await this.api.state(this.getSessionId())
-      if (status === 'busy' || status === 'running') {
+      this.store.runtimeStatus =
+        status === 'busy' || status === 'running' ? 'busy' : 'idle'
+      if (this.store.runtimeStatus === 'busy') {
         this.store.sending = true
         this.store.notify()
       }
@@ -209,6 +217,7 @@ export class MessagesController {
   /** Converge to idle if the stream ended without a terminal event. */
   private syncIdle() {
     if (!this.store.sending) return
+    this.store.runtimeStatus = 'idle'
     this.finishStreaming()
   }
 

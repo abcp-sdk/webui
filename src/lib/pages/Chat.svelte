@@ -659,7 +659,18 @@
     <header class="relative flex h-12 shrink-0 items-center gap-2 border-b border-border px-2">
       <div class="flex min-w-0 items-center gap-2">
         <IconButton icon={AppIcons.back} label={t('back')} onclick={() => store.popPage()} />
-        <span class={cn('size-2 rounded-full', ctrl.sending ? 'bg-success' : 'bg-muted-foreground')}></span>
+        <span
+          class={cn(
+            'size-2 rounded-full',
+            ctrl.runtimeStatus === 'busy'
+              ? 'animate-pulse bg-success'
+              : ctrl.runtimeStatus === 'unknown'
+                ? 'bg-warning'
+                : 'bg-muted-foreground',
+          )}
+          title={ctrl.runtimeStatus === 'busy' ? t('running') : ctrl.runtimeStatus === 'unknown' ? t('statusUnknown') : t('idle')}
+          aria-label={ctrl.runtimeStatus === 'busy' ? t('running') : ctrl.runtimeStatus === 'unknown' ? t('statusUnknown') : t('idle')}
+        ></span>
         {#if ctxLabel}
           <span class="text-micro text-muted-foreground tabular-nums">{ctxLabel}</span>
         {/if}
